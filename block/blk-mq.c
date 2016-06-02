@@ -1467,17 +1467,14 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 
 	if (bio_integrity_enabled(bio) && bio_integrity_prep(bio)) {
 		bio_io_error(bio);
-		return BLK_QC_T_NONE;/*lint !e501*/
+		return BLK_QC_T_NONE; /*lint !e501*/
 	}
 
 	blk_queue_split(q, &bio, q->bio_split);
 
-	if (!is_flush_fua && !blk_queue_nomerges(q)) {
-		if (blk_attempt_plug_merge(q, bio, &request_count,
-					   &same_queue_rq))
-			return BLK_QC_T_NONE;/*lint !e501*/
-	} else
-		request_count = blk_plug_queued_count(q);
+	if (!is_flush_fua && !blk_queue_nomerges(q) &&
+	    blk_attempt_plug_merge(q, bio, &request_count, &same_queue_rq))
+		return BLK_QC_T_NONE; /*lint !e501*/
 
 	/*lint -save -e712 -e747*/
 	wb_acct = wbt_wait(q->rq_wb, bio->bi_rw, NULL);
@@ -1583,14 +1580,15 @@ static blk_qc_t blk_sq_make_request(struct request_queue *q, struct bio *bio)
 
 	blk_queue_split(q, &bio, q->bio_split);
 
-	if (!is_flush_fua && !blk_queue_nomerges(q) &&
-	    blk_attempt_plug_merge(q, bio, &request_count, NULL))
-		return BLK_QC_T_NONE;/*lint !e501*/
+	if (!is_flush_fua && !blk_queue_nomerges(q)) {
+		if (blk_attempt_plug_merge(q, bio, &request_count, NULL))
+			return BLK_QC_T_NONE;/*lint !e501*/
+	} else
+		request_count = blk_plug_queued_count(q);
 
 	/*lint -save -e712 -e747*/
 	wb_acct = wbt_wait(q->rq_wb, bio->bi_rw, NULL);
 	/*lint -restore*/
-
 	rq = blk_mq_map_request(q, bio, &data);
 	if (unlikely(!rq)) {
 		if (wb_acct)
