@@ -313,6 +313,8 @@ struct xhci_op_regs {
 #define XDEV_U2		(0x2 << 5)
 #define XDEV_U3		(0x3 << 5)
 #define XDEV_INACTIVE	(0x6 << 5)
+#define XDEV_POLLING	(0x7 << 5)
+#define XDEV_COMP_MODE  (0xa << 5)
 #define XDEV_RESUME	(0xf << 5)
 /* true: port has power (see HCC_PPC) */
 #define PORT_POWER	(1 << 9)
@@ -1634,12 +1636,13 @@ struct xhci_hcd {
 /* For controllers with a broken beyond repair streams implementation */
 #define XHCI_BROKEN_STREAMS	(1 << 19)
 #define XHCI_PME_STUCK_QUIRK	(1 << 20)
-#define XHCI_CTRL_NYET_ABNORMAL	(1 << 21)
+#define XHCI_MISSING_CAS	(1 << 24)
 
+#define XHCI_CTRL_NYET_ABNORMAL	(1 << 29)
 #ifdef CONFIG_USB_DWC3_NYET_ABNORMAL
-#define XHCI_DISABLE_LPM	(1 << 22)
-#define XHCI_NOT_SUP_SG		(1 << 23)
-#define XHCI_HCD_LOCAL_MEM	(1 << 24)
+#define XHCI_DISABLE_LPM	(1 << 30)
+#define XHCI_NOT_SUP_SG		(1ULL << 31)
+#define XHCI_HCD_LOCAL_MEM	(1ULL << 32)
 #endif
 
 	unsigned int		num_active_eps;
