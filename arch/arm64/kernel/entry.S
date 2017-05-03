@@ -18,6 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/arm-smccc.h>
 #include <linux/init.h>
 #include <linux/linkage.h>
 
@@ -32,8 +33,8 @@
 #include <asm/ptrace.h>
 #include <asm/thread_info.h>
 #include <asm/uaccess.h>
+#include <asm/asm-uaccess.h>
 #include <asm/unistd.h>
-#include <linux/arm-smccc.h>
 
 /*
  * Context tracking subsystem.  Used to instrument transitions
@@ -462,12 +463,13 @@ el1_da:
 	/*
 	 * Data abort handling
 	 */
-	mrs	x0, far_el1
+	mrs	x3, far_el1
 	enable_dbg
 	// re-enable interrupts if they were enabled in the aborted context
 	tbnz	x23, #7, 1f			// PSR_I_BIT
 	enable_irq
 1:
+	clear_address_tag x0, x3
 	mov	x2, sp				// struct pt_regs
 	bl	do_mem_abort
 
@@ -651,7 +653,7 @@ el0_da:
 	// enable interrupts before calling the main handler
 	enable_dbg_and_irq
 	ct_user_exit
-	bic	x0, x26, #(0xff << 56)
+	clear_address_tag x0, x26
 	mov	x1, x25
 	mov	x2, sp
 	bl	do_mem_abort
