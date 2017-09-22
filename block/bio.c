@@ -1363,6 +1363,13 @@ struct bio *bio_map_user_iov(struct request_queue *q,
 			if (bio->bi_vcnt == prev_bi_vcnt)
 				put_page(pages[j]);
 
+			/*
+			 * check if vector was merged with previous
+			 * drop page reference if needed
+			 */
+			if (bio->bi_vcnt == prev_bi_vcnt)
+				put_page(pages[j]);
+
 			len -= bytes;
 			offset = 0;
 		}
