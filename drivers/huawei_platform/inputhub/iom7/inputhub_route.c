@@ -129,7 +129,6 @@ extern int send_fingerprint_cmd_internal(int tag, obj_cmd_t cmd, fingerprint_typ
 extern void fingerprint_report(void);
 void inputhub_process_sensor_report(const pkt_header_t* head);
 
-
 #ifdef CONFIG_HUAWEI_CHARGER_SENSORHUB
 static uint32_t charge_event;
 static int need_upload = 0;

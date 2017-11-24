@@ -296,7 +296,7 @@ void nls_uniname_to_cstring(struct super_block *sb, u8 *p_cstring, UNI_NAME_T *p
 
 	if (nls == NULL) {
 		len = utf16s_to_utf8s(uniname, MAX_NAME_LENGTH, UTF16_HOST_ENDIAN, p_cstring, MAX_NAME_LENGTH);
-		p_cstring[len] = 0;
+		p_cstring[len] = 0;/* [false alarm]:native code*/
 		return;
 	}
 

@@ -59,5 +59,5 @@ void exfat_bitmap_set(u8 *bitmap, int i)
 
 void exfat_bitmap_clear(u8 *bitmap, int i)
 {
-	bitmap[BITMAP_LOC(i)] &= ~(0x01 << BITMAP_SHIFT(i));
+	bitmap[BITMAP_LOC(i)] &= ~(0x01 << BITMAP_SHIFT(i)); /* [false alarm]:native code*/
 } /* end of Bitmap_clear */

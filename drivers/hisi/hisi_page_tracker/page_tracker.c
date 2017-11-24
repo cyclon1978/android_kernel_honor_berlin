@@ -67,7 +67,7 @@ static int early_page_tracker_param(char *buf)
 	if (!buf)
 		return -EINVAL;
 
-	if (strcmp(buf, "on") == 0)
+	if (strcmp(buf, "on") == 0) /*lint !e421*/
 		page_tracker_disabled = false;
 
 	return 0;
@@ -86,7 +86,7 @@ void page_tracker_show(struct page *page, int order)
 
 	page_ext = lookup_page_ext(page);
 	if (page_ext) {
-		unsigned int order = page_ext->page_tracker.order;
+		unsigned int order = page_ext->page_tracker.order; /*lint !e578*/
 		unsigned int head = page_ext->page_tracker.head;
 		unsigned int type = page_ext->page_tracker.type;
 		unsigned int pid = page_ext->page_tracker.pid;
@@ -169,7 +169,7 @@ void page_tracker_change_tracker(struct page *new_page,
 		page_old_ext->page_tracker.head = true;
 		page_old_ext->page_tracker.type = TRACK_PROC;
 		page_old_ext->page_tracker.pid = current->pid;
-		page_old_ext->page_tracker.trace = _RET_IP_;
+		page_old_ext->page_tracker.trace = _RET_IP_; /*lint !e571*/
 	}
 }
 
@@ -272,7 +272,7 @@ static void insert_node
 		rb_link_node(&shadow->node, parent, p);
 		rb_insert_color(&shadow->node, root);
 	}
-}
+} /*lint !e429*/
 
 static void rbtree_kern_show(struct rb_root *root, int type)
 {
@@ -398,7 +398,7 @@ static int page_tracker_info_show(struct seq_file *s, void *unused)
 		 * build rb tree
 		 */
 		pgdat_resize_lock(pgdat, &flags);
-		for (i = 0; i < nd_pg;
+		for (i = 0; i < nd_pg; /*lint !e574*/
 				i += step, pfn += step) {
 			step = 1;
 			if (!pfn_valid(pfn))
@@ -467,7 +467,7 @@ static int ktrackerd(void *p)
 	int i;
 	int step;
 	unsigned short nr;
-	DEFINE_WAIT(wait);
+	DEFINE_WAIT(wait); /*lint !e446*/
 	pg_data_t *pgdat = p;
 	unsigned long buddy = 0;
 	unsigned long nd_pg = pgdat->node_spanned_pages;
@@ -496,7 +496,7 @@ static int ktrackerd(void *p)
 		 * build rb tree
 		 */
 		pgdat_resize_lock(pgdat, &flags);
-		for (i = 0; i < nd_pg;
+		for (i = 0; i < nd_pg; /*lint !e574*/
 				i += step, pfn += step) {
 			step = 1;
 			if (!pfn_valid(pfn))
@@ -532,13 +532,13 @@ static int ktrackerd(void *p)
 
 	} while (1);
 
-	return 0;
+	return 0; /*lint !e527*/
 }
 
 #ifdef PGTRACK_TEST
 static int ktrackerd_test_func(void *p)
 {
-	while (0) {
+	while (0) { /*lint !e681*/
 		struct page *pg = NULL;
 		pg = alloc_pages((GFP_USER | __GFP_NOWARN | __GFP_COMP), 4);
 		msleep(1000);
@@ -561,7 +561,7 @@ static int creat_trackerd(int nid)
 	/*
 	 * 1. create page track info @ proc API
 	 */
-	ret = snprintf(kbuf, 32, "page-tracker%d", nid);
+	ret = snprintf(kbuf, 32, "page-tracker%d", nid); /* unsafe_function_ignore: snprintf  */
 	if (ret >= 32)
 		goto err;
 	entry = proc_create_data(kbuf, 0400,
@@ -613,7 +613,7 @@ static void init_page_tracker(void)
 		struct page_ext *page_ext = NULL;
 
 		pgdat_resize_lock(pgdat, &flags);
-		for (i = 0; i < nd_pg; i++,pfn++) {
+		for (i = 0; i < nd_pg; i++,pfn++) { /*lint !e574*/
 			if (!pfn_valid(pfn))
 				continue;
 

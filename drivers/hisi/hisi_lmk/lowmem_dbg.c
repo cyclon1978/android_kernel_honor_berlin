@@ -42,7 +42,7 @@ static int task_state_char(unsigned long state)
 {
 	int bit = state ? __ffs(state) + 1 : 0;
 
-	return bit < sizeof(state_to_char) - 1 ? state_to_char[bit] : '?';
+	return bit < sizeof(state_to_char) - 1 ? state_to_char[bit] : '?'; /*lint !e574 */
 }
 
 static void dump_tasks(bool verbose)
@@ -90,7 +90,7 @@ static void dump_tasks(bool verbose)
 			tsk_oom_adj,
 			task_state_char(task->state),
 			task->comm,
-			frozen_mark);
+			frozen_mark); /*lint !e1058*/
 		task_unlock(task);
 	}
 	rcu_read_unlock();
@@ -127,7 +127,7 @@ void hisi_lowmem_dbg_timeout(struct task_struct *p, struct task_struct *leader)
 	struct task_struct *t;
 
 	pr_info("timeout '%s' (%d)\n", leader->comm, leader->pid);
-	for_each_thread(p, t) {
+	for_each_thread(p, t) { /*lint !e64 */
 		pr_info("  pid=%d tgid=%d %s mm=%d frozen=%d 0x%lx 0x%x\n",
 			t->pid, t->tgid, t->comm, t->mm ? 1 : 0,
 			frozen(t), t->state, t->flags);

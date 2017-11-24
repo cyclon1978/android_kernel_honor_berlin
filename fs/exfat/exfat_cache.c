@@ -312,7 +312,7 @@ static s32 __FAT_write(struct super_block *sb, u32 loc, u32 content)
 				SET16(fat_entry, content);
 			}
 		} else { /* even */
-			fat_sector[off] = (u8)(content);
+			fat_sector[off] = (u8)(content);/* [false alarm]:native code*/
 
 			if (off == (p_bd->sector_size-1)) {
 				fat_sector[off] = (u8)(content);

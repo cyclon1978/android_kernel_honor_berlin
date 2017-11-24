@@ -159,7 +159,7 @@ s32 bdev_write(struct super_block *sb, u32 secno, struct buffer_head *bh, u32 nu
 			goto no_bh;
 
 		lock_buffer(bh2);
-		memcpy(bh2->b_data, bh->b_data, count);
+		memcpy(bh2->b_data, bh->b_data, count);/* unsafe_function_ignore: memcpy */
 		set_buffer_uptodate(bh2);
 		mark_buffer_dirty(bh2);
 		unlock_buffer(bh2);

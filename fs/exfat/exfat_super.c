@@ -2428,6 +2428,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	/* codepage is not meaningful in exfat */
 	if (sbi->fs_info.vol_type != EXFAT) {
 		error = -EINVAL;
+		/*cppcheck-suppress * */
 		sprintf(buf, "cp%d", sbi->options.codepage);
 		sbi->nls_disk = load_nls(buf);
 		if (!sbi->nls_disk) {
