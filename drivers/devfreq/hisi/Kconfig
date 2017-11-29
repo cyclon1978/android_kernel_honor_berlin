@@ -28,6 +28,11 @@ config DEVFREQ_GOV_MALI_ONDEMAND
     help
       This enables the hisilicon MALI GPU driver.
 
+config DEVFREQ_GOV_GPU_SCENE_AWARE
+    tristate "Hisilicon GPU Scene Aware"
+    depends on ARCH_HISI && PM_DEVFREQ
+    select PM_OPP
+
 config HISI_DDR_CHINTLV
     bool "Hisilicon ddr devfreq chintlv"
     default n
