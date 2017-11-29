@@ -784,6 +784,9 @@ static ssize_t governor_store(struct device *dev, struct device_attribute *attr,
 	int ret;
 	char str_governor[DEVFREQ_NAME_LEN + 1];
 	struct devfreq_governor *governor;
+#ifdef CONFIG_ARCH_HISI
+	const struct devfreq_governor *old_governor;
+#endif
 
 	ret = sscanf(buf, "%" __stringify(DEVFREQ_NAME_LEN) "s", str_governor);
 	if (ret != 1)
@@ -795,8 +798,10 @@ static ssize_t governor_store(struct device *dev, struct device_attribute *attr,
 		ret = PTR_ERR(governor);
 		goto out;
 	}
-	if (df->governor == governor)
+	if (df->governor == governor) {
+		ret = 0;
 		goto out;
+	}
 
 	if (df->governor) {
 		ret = df->governor->event_handler(df, DEVFREQ_GOV_STOP, NULL);
@@ -806,12 +811,21 @@ static ssize_t governor_store(struct device *dev, struct device_attribute *attr,
 			goto out;
 		}
 	}
+#ifdef CONFIG_ARCH_HISI
+	old_governor = df->governor;
+#endif
 	df->governor = governor;
 	strncpy(df->governor_name, governor->name, DEVFREQ_NAME_LEN);
 	ret = df->governor->event_handler(df, DEVFREQ_GOV_START, NULL);
-	if (ret)
+	if (ret) {
 		dev_warn(dev, "%s: Governor %s not started(%d)\n",
 			 __func__, df->governor->name, ret);
+#ifdef CONFIG_ARCH_HISI
+		df->governor = old_governor;
+		strncpy(df->governor_name, old_governor->name, DEVFREQ_NAME_LEN);
+		ret = df->governor->event_handler(df, DEVFREQ_GOV_START, NULL);
+#endif
+	}
 out:
 	mutex_unlock(&devfreq_list_lock);
 
