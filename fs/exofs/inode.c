@@ -217,7 +217,7 @@ static int __readpages_done(struct page_collect *pcol)
 		int page_stat;
 
 		if (inode != pcol->inode)
-			continue;
+			continue; /* osd might add more pages at end */
 
 		if (likely(length < good_bytes))
 			page_stat = 0;
@@ -370,7 +370,13 @@ err:
 	return ret;
 }
 
-
+/* readpage_strip is called either directly from readpage() or by the VFS from
+ * within read_cache_pages(), to add one more page to be read. It will try to
+ * collect as many contiguous pages as posible. If a discontinuity is
+ * encountered, or it runs out of resources, it will submit the previous segment
+ * and will start a new collection. Eventually caller must submit the last
+ * segment if present.
+ */
 static int readpage_strip(void *data, struct page *page)
 {
 	struct page_collect *pcol = data;
@@ -679,7 +685,13 @@ err:
 	return ret;
 }
 
-
+/* writepage_strip is called either directly from writepage() or by the VFS from
+ * within write_cache_pages(), to add one more page to be written to storage.
+ * It will try to collect as many contiguous pages as possible. If a
+ * discontinuity is encountered or it runs out of resources it will submit the
+ * previous segment and will start a new collection.
+ * Eventually caller must submit the last segment if present.
+ */
 static int writepage_strip(struct page *page,
 			   struct writeback_control *wbc_unused, void *data)
 {
