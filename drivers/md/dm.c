@@ -27,11 +27,6 @@
 
 #include <trace/events/block.h>
 
-#ifdef CONFIG_HUAWEI_IO_TRACING
-#include <trace/iotrace.h>
-DEFINE_TRACE(block_dm_request);
-#endif
-
 #define DM_MSG_PREFIX "core"
 
 #ifdef CONFIG_PRINTK

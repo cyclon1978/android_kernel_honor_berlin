@@ -30,11 +30,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/wbt.h>
 
-#ifdef CONFIG_HUAWEI_IO_TRACING
-#include <trace/iotrace.h>
-DEFINE_TRACE(f2fs_detected_quasi);
-#endif
-
 struct bio_wait{
     struct bio *bio;
     wait_queue_t wait;
@@ -523,9 +518,6 @@ static void find_page_in_bio(struct page *page, struct rq_wb *rwb)
             {
                 if (unlikely(!rwb_enabled(rwb)))
                 {
-#ifdef CONFIG_HUAWEI_IO_TRACING
-                    trace_f2fs_detected_quasi(bio_search);
-#endif
 
 #ifdef CONFIG_QUASI
                     aio_wait->flag = 1;
