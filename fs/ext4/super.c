@@ -56,9 +56,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/ext4.h>
 
-#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
-#include "remount_fail.h"
-#endif
 static struct proc_dir_entry *ext4_proc_root;
 static struct kset *ext4_kset;
 static struct ext4_lazy_init *ext4_li_info;
@@ -414,10 +411,6 @@ static void ext4_handle_error(struct super_block *sb)
 		panic("EXT4-fs (device %s): panic forced after error\n",
 			sb->s_id);
 	}
-
-#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
-	trigger_double_data(sb);
-#endif
 }
 
 #define ext4_error_ratelimit(sb)					\
@@ -617,10 +610,6 @@ void __ext4_abort(struct super_block *sb, const char *function,
 			return;
 		panic("EXT4-fs panic from previous error\n");
 	}
-
-#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
-	trigger_double_data(sb);
-#endif
 }
 
 void __ext4_msg(struct super_block *sb,
