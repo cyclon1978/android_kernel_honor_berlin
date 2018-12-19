@@ -58,3 +58,10 @@ config CPU_FREQ_POWER_STAT
 	default n
 	help
 	  Keep track of amount of power each task consumes and report power per uid
+
+config OVERCLOCK_AS_KIRIN_655
+       bool "Enable overclock for Kirin 650 to 655 max frequency
+       default n
+       help
+         Enables overclock by setting the target_cpu to Kirin 655 which
+         enables 2362 MHz CPU frequency
