@@ -1,0 +1,10 @@
+#
+# Huawei Honor configuration module
+#
+
+comment "configure advanced kernel features"
+config HISI_HONORCFG
+	bool "Huawei Configure feature"
+	default n
+	help
+	  This module provides interfaces for user and kernel to configure advanced features.

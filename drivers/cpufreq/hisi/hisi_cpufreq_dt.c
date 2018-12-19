@@ -215,6 +215,12 @@ static int hisi_cpufreq_get_dt_version(void)
 	}
 	of_node_put(np);
 
+#ifdef CONFIG_OVERCLOCK_AS_KIRIN_655
+        pr_err("%s: target_cpu from dt:%s.\n", __func__, target_cpu);
+        target_cpu = "Kirin 655";
+        pr_err("%s: target_cpu set to:%s.\n", __func__, target_cpu);
+#endif
+
 	np = of_find_compatible_node(NULL, NULL, "hisi,supportedtarget");
 	if (!np) {
 		pr_err("%s Failed to find compatible node:supportedtarget\n", __func__);
