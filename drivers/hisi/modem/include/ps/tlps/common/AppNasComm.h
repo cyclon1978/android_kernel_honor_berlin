@@ -962,7 +962,9 @@ typedef struct
     VOS_UINT32                          aulLteBand[2];
     VOS_UINT32                          ulArfcn;                                /* ◊§¡Ù∆µµ„–≈œ¢ */
     NAS_MM_CELL_TYPE_ENUM_UINT8         ucCellType;
-    VOS_UINT8                           aucReserved[3];
+    VOS_UINT8                           ucAccessType;
+    VOS_UINT8                            ucSupportImsEmcFlag;
+    VOS_UINT8                            ucBandWidth;
     VOS_UINT32                          ulCsgId;
 }NAS_MM_NETWORK_ID_STRU;
 typedef NAS_MM_NETWORK_ID_STRU          NAS_EMM_NETWORK_ID_STRU;

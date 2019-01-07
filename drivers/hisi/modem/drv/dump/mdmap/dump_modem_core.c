@@ -199,11 +199,6 @@ void system_error(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 length)
 {
     u32 rdr_mod_id;
 
-    bsp_coresight_disable();
-
-    dump_fetal("[0x%x]================ modem acore enter system error! ================\n", bsp_get_slice_value());
-    dump_fetal("mod_id=0x%x arg1=0x%x arg2=0x%x data=0x%p len=0x%x\n", mod_id, arg1, arg2, data, length);
-
     rdr_mod_id = dump_match_rdr_mod_id(mod_id);
 
     dump_fetal("rdr mod id is 0x%x\n", rdr_mod_id);
@@ -213,44 +208,6 @@ void system_error(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 length)
         dump_fetal("rdr mod id no need to save log,enter rdr_system_error directly\n");
         rdr_system_error(rdr_mod_id, arg1, arg2);
         return;
-    }
-
-    if(true == dump_check_has_error())
-    {
-        return;
-    }
-
-    if (dump_get_init_phase() < DUMP_INIT_FLAG_CP_AGENT)
-    {
-        dump_fetal("modem dump has not init\n");
-        return;
-    }
-    
-    dump_set_reboot_contex(DUMP_CPU_APP, DUMP_REASON_NORMAL);
-
-
-    if(mod_id == DRV_ERRNO_DUMP_CP_WDT && arg1 == DUMP_REASON_WDT)
-    {
-        dump_cp_wdt_proc();
-        dump_save_base_info(BSP_MODU_OTHER_CORE,arg1,arg2, data,length);
-    }
-    else if(mod_id == DRV_ERRNO_DLOCK && arg1 == DUMP_REASON_DLOCK)
-    {
-        dump_cp_dlock_proc();
-        dump_save_base_info(BSP_MODU_OTHER_CORE,arg1,arg2, data,length);
-    }
-    else
-    {
-        dump_save_base_info(mod_id, arg1, arg2, data, length);
-    }
-
-    dump_save_usr_data(data, length);
-
-    if(DUMP_PHONE == dump_get_product_type())
-    {
-        dump_show_stack(mod_id,arg1);
-        dump_save_modem_sysctrl();
-        dump_save_balong_rdr_info(rdr_mod_id);
     }
 
     rdr_system_error(rdr_mod_id, arg1, arg2);
@@ -279,14 +236,13 @@ s32 __init bsp_dump_init(void)
     dump_config_init();
 
     dump_mdmap_field_init();
-    
+
     dump_set_init_phase(DUMP_INIT_FLAG_CONFIG);
 
     ret = dump_base_info_init();
     if(ret == BSP_ERROR)
     {
         dump_fetal("dump_base_info_init fail\n");
-        return BSP_ERROR;
     }
     dump_set_init_phase(DUMP_INIT_FLAG_BASEINFO);
 
@@ -294,7 +250,6 @@ s32 __init bsp_dump_init(void)
     if(ret == BSP_ERROR)
     {
         dump_fetal("dump_save_task_init fail\n");
-        return BSP_ERROR;
     }
     dump_set_init_phase(DUMP_INIT_FLAG_SAVETASK);
 
@@ -302,7 +257,6 @@ s32 __init bsp_dump_init(void)
     if(ret == BSP_ERROR)
     {
         dump_fetal("dump_register_rdr_exc fail\n");
-        return BSP_ERROR;
     }
     dump_set_init_phase(DUMP_INIT_FLAG_RDR_REG);
 
@@ -311,7 +265,6 @@ s32 __init bsp_dump_init(void)
     {
         dump_fetal("dump_cp_agent_init fail\n");
 
-        return BSP_ERROR;
     }
     dump_set_init_phase(DUMP_INIT_FLAG_CP_AGENT);
 
@@ -320,7 +273,6 @@ s32 __init bsp_dump_init(void)
     {
         dump_fetal("bsp_apr_init fail\n");
 
-        return BSP_ERROR;
     }
     dump_set_init_phase(DUMP_INIT_FLAG_APR);
 

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1998 Brian Somers <brian@Awfulhak.org>
  * All rights reserved.
  *
@@ -23,7 +25,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $FreeBSD: releng/11.1/usr.sbin/ppp/link.h 131327 2004-06-30 12:24:56Z brian $
+ * $FreeBSD: releng/11.2/usr.sbin/ppp/link.h 330449 2018-03-05 07:26:05Z eadler $
  *
  */
 #ifndef __PPP_LINK_H__

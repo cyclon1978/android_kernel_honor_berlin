@@ -69,22 +69,6 @@ struct dump_global_area_ctrl_s g_st_dump_area_ctrl;
 *****************************************************************************/
 s32 dump_get_area_info(DUMP_AREA_ID areaid,struct dump_area_mntn_addr_info_s* area_info)
 {
-    if(!g_st_dump_area_ctrl.ulInitFlag)
-    {
-        dump_fetal("dump area has not init\n");
-        return BSP_ERROR;
-    }
-
-    if((areaid >= DUMP_AREA_BUTT)||(NULL == area_info))
-    {
-        dump_fetal("dump area erro para areaid = %d\n",areaid);
-
-        return BSP_ERROR;
-    }
-
-    area_info->vaddr    = (void*)((unsigned long)g_st_dump_area_ctrl.virt_addr+g_st_dump_area_ctrl.virt_addr->area_info[areaid].offset);
-    area_info->paddr    = (void*)(g_st_dump_area_ctrl.phy_addr+g_st_dump_area_ctrl.virt_addr->area_info[areaid].offset);
-    area_info->len      = g_st_dump_area_ctrl.virt_addr->area_info[areaid].length;
 
     return BSP_OK;
 }
@@ -104,13 +88,6 @@ s32 dump_get_area_info(DUMP_AREA_ID areaid,struct dump_area_mntn_addr_info_s* ar
 *****************************************************************************/
 s32 dump_get_global_info(struct dump_global_area_ctrl_s * global_area)
 {
-    if(0 == g_st_dump_area_ctrl.ulInitFlag || global_area == NULL)
-    {
-        return BSP_ERROR;
-    }
-    global_area->virt_addr = g_st_dump_area_ctrl.virt_addr;
-    global_area->phy_addr = g_st_dump_area_ctrl.phy_addr;
-    global_area->length = g_st_dump_area_ctrl.length;
     return BSP_OK;
 
 }
@@ -130,14 +107,7 @@ s32 dump_get_global_info(struct dump_global_area_ctrl_s * global_area)
 *****************************************************************************/
 void* dump_get_global_baseinfo(void)
 {
-    if(!g_st_dump_area_ctrl.ulInitFlag)
-    {
-        dump_fetal("dump area has not init\n");
-
-        return NULL;
-    }
-
-    return &(g_st_dump_area_ctrl.virt_addr->base_info);
+    return NULL;
 }
 /*****************************************************************************
 * º¯ Êý Ãû  : dump_area_init
@@ -154,61 +124,7 @@ void* dump_get_global_baseinfo(void)
 *****************************************************************************/
 s32 dump_area_init(void)
 {
-    dump_load_info_t * dump_load = NULL;
-    s32 len ;
 
-    if(g_st_dump_area_ctrl.ulInitFlag)
-    {
-        dump_fetal("dump area has init\n");
-        return BSP_OK;
-    }
-    g_st_dump_area_ctrl.phy_addr = MDDR_FAMA(MNTN_BASE_ADDR);
-    g_st_dump_area_ctrl.length   = MNTN_BASE_SIZE;
-    g_st_dump_area_ctrl.virt_addr= (struct dump_global_struct_s*)ioremap_wc(g_st_dump_area_ctrl.phy_addr,g_st_dump_area_ctrl.length);
-
-    if(NULL == g_st_dump_area_ctrl.virt_addr)
-    {
-        dump_error(" ioremap fail !\n");
-        return BSP_ERROR;
-    }
-
-    memset(g_st_dump_area_ctrl.virt_addr,0,g_st_dump_area_ctrl.length);
-    g_st_dump_area_ctrl.virt_addr->top_head.area_number     = DUMP_AREA_BUTT;
-    g_st_dump_area_ctrl.virt_addr->top_head.magic           = DUMP_GLOBALE_TOP_HEAD_MAGIC;
-    /*coverity[secure_coding]*/
-    len = snprintf((char*)g_st_dump_area_ctrl.virt_addr->top_head.build_time,sizeof(g_st_dump_area_ctrl.virt_addr->top_head.build_time),"%s,%s", __DATE__,__TIME__);
-    if(len > 32 || len < 0)
-    {
-        return BSP_ERROR;
-    }
-    /*coverity[secure_coding]*/
-    len = snprintf((char*)g_st_dump_area_ctrl.virt_addr->top_head.product_name, sizeof(g_st_dump_area_ctrl.virt_addr->top_head.product_name),"%s",PRODUCT_NAME);
-    if(len > 32 || len < 0)
-    {
-        return BSP_ERROR;
-    }
-    /*coverity[secure_coding]*/
-    len = snprintf((char*)g_st_dump_area_ctrl.virt_addr->top_head.product_version,sizeof(g_st_dump_area_ctrl.virt_addr->top_head.product_version),"%s",PRODUCT_FULL_VERSION_STR);
-    if(len > 32 || len < 0)
-    {
-        return BSP_ERROR;
-    }
-
-    g_st_dump_area_ctrl.virt_addr->area_info[DUMP_AREA_MDMAP].offset     = MNTN_AREA_MDMAP_ADDR- MNTN_BASE_ADDR;
-    g_st_dump_area_ctrl.virt_addr->area_info[DUMP_AREA_MDMAP].length     = MNTN_AREA_MDMAP_SIZE;
-    g_st_dump_area_ctrl.virt_addr->area_info[DUMP_AREA_CP].offset        = MNTN_AREA_CP_ADDR - MNTN_BASE_ADDR;
-    g_st_dump_area_ctrl.virt_addr->area_info[DUMP_AREA_CP].length        = MNTN_AREA_CP_SIZE;
-
-    dump_load = (dump_load_info_t *)((u8*)g_st_dump_area_ctrl.virt_addr+(MNTN_AREA_RESERVE_ADDR-MNTN_BASE_ADDR));
-    dump_load->mdm_ddr  = DDR_MCORE_ADDR;
-    dump_load->mdm_share= DDR_SHARED_MEM_ADDR;
-    dump_load->mdm_dump = DDR_MNTN_ADDR;
-    dump_load->mdm_sram = HI_SRAM_MEM_ADDR;
-    dump_load->mdm_dts  = DDR_MCORE_DTS_ADDR;
-    dump_load->magic_num= DUMP_LOAD_MAGIC;
-    g_st_dump_area_ctrl.ulInitFlag = true;
-
-    dump_fetal("dump_area_init finish\n");
 
     return BSP_OK;
 }

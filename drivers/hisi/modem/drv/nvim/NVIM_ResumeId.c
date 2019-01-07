@@ -124,7 +124,6 @@ unsigned short  g_ausNvResumeManufactureIdList[] =
     en_NV_Item_LiveTime,
     en_NV_Item_ManufactureInfo,
     en_NV_Item_BATT_TEMP_SENSOR_TABLE,
-    en_NV_Item_CCA_TelePara,
     en_NV_Item_Factory_Info,
     en_NV_Item_BODY_SAR_PARA,
 
