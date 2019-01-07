@@ -83,41 +83,7 @@ char * lphy_image_ddr_addr = NULL;
 *****************************************************************************/
 void dump_save_all_tcm(char* data,char* dst_path)
 {
-    char file_name[128] = {0}; 
-    /* DTCM PUB */
-    /* coverity[HUAWEI DEFECT] */
-    memset(file_name, 0, sizeof(file_name));
-    /* coverity[HUAWEI DEFECT] */
-    snprintf(file_name, sizeof(file_name), "%slphy_pub_dtcm.bin", dst_path);
-    dump_save_file(file_name,data,LPHY_PUB_DTCM_SIZE);
-    dump_fetal("[dump]: save %s finished!\n",file_name);
 
-    /*DTCM MOD*/
-    /* coverity[HUAWEI DEFECT] */
-    memset(file_name, 0, sizeof(file_name));
-    /* coverity[HUAWEI DEFECT] */
-    snprintf(file_name, sizeof(file_name), "%slphy_mode_dtcm.bin", dst_path);
-    dump_save_file(file_name,data+LPHY_PUB_DTCM_SIZE,LPHY_PRV_DTCM_SIZE);
-    dump_fetal("[dump]: save %s finished!\n",file_name);
-
-    if(dump_get_edition_type() == EDITION_INTERNAL_BETA)
-    {
-        /* ITCM PUB */
-        /* coverity[HUAWEI DEFECT] */
-        memset(file_name, 0, sizeof(file_name));
-        /* coverity[HUAWEI DEFECT] */
-        snprintf(file_name, sizeof(file_name), "%slphy_pub_itcm.bin", dst_path);
-        dump_save_file(file_name,data+LPHY_PUB_DTCM_SIZE+LPHY_PRV_DTCM_SIZE,LPHY_PUB_ITCM_SIZE);
-        dump_fetal("[dump]: save %s finished!\n",file_name);
-
-        /*ITCM MOD*/
-        /* coverity[HUAWEI DEFECT] */
-        memset(file_name, 0, sizeof(file_name));
-        /* coverity[HUAWEI DEFECT] */
-        snprintf(file_name, sizeof(file_name), "%slphy_mode_itcm.bin", dst_path);
-        dump_save_file(file_name,data+LPHY_PUB_DTCM_SIZE+LPHY_PUB_ITCM_SIZE+LPHY_PRV_DTCM_SIZE,LPHY_PRV_ITCM_SIZE);
-        dump_fetal("[dump]: save %s finished!\n",file_name);
-    }
 }
 
 /*****************************************************************************
@@ -135,58 +101,7 @@ void dump_save_all_tcm(char* data,char* dst_path)
 *****************************************************************************/
 void dump_save_some_tcm(char* data,char* dst_path)
 {
-    int fd;
-    int ret;
-    char file_name[128] = {0};
 
-    /*MBB与PHONE均保存DTCM*/
-    /* coverity[HUAWEI DEFECT] */
-    memset(file_name, 0, sizeof(file_name));
-    /* coverity[HUAWEI DEFECT] */
-    snprintf(file_name, sizeof(file_name), "%slphy_dtcm.bin", dst_path);
-    fd = bsp_open(file_name,RFILE_RDWR|RFILE_CREAT,0660);
-    if(fd<0){
-        dump_fetal("[dump]:open %s failed ,save lphy_dtcm failed!\n",file_name);
-        return;
-    }
-    ret = bsp_write(fd,data,LPHY_PUB_DTCM_SIZE);
-    if(ret != LPHY_PUB_DTCM_SIZE)
-        goto err0;
-    ret = bsp_write(fd,data+LPHY_PUB_DTCM_SIZE + LPHY_PUB_ITCM_SIZE,LPHY_PRV_DTCM_SIZE);
-    if(ret != LPHY_PRV_DTCM_SIZE)
-        goto err0;
-    ret = bsp_write(fd,data+LPHY_PUB_DTCM_SIZE + LPHY_PUB_ITCM_SIZE + LPHY_PRV_DTCM_SIZE + LPHY_PRV_ITCM_SIZE,LPHY_PRV_DTCM_SIZE);
-    if(ret != LPHY_PRV_DTCM_SIZE)
-        goto err0;
-    dump_fetal("[dump]: save %s finished!\n",file_name);
-err0:
-    bsp_close(fd);
-
-    /*如果是PHONE产品则同时保存LPHY ITCM，MBB受空间限制则只保存DTCM部分*/
-    if(DUMP_PHONE == dump_get_product_type())
-    {
-        /* coverity[HUAWEI DEFECT] */
-        memset(file_name, 0, sizeof(file_name));
-        /* coverity[HUAWEI DEFECT] */
-        snprintf(file_name, sizeof(file_name), "%slphy_itcm.bin", dst_path);
-        fd = bsp_open(file_name,RFILE_RDWR|RFILE_CREAT,0660);
-        if(fd<0){
-            dump_fetal("[dump]:open %s failed ,save lphy_itcm failed!\n",file_name);
-            return;
-        }
-        ret = bsp_write(fd,data+LPHY_PUB_DTCM_SIZE,LPHY_PUB_ITCM_SIZE);
-        if(ret != LPHY_PUB_ITCM_SIZE)
-            goto err1;
-        ret = bsp_write(fd,data+LPHY_PUB_DTCM_SIZE+LPHY_PUB_ITCM_SIZE+LPHY_PRV_DTCM_SIZE,LPHY_PRV_ITCM_SIZE);
-        if(ret != LPHY_PRV_ITCM_SIZE)
-            goto err1;
-        ret = bsp_write(fd,data+LPHY_PUB_DTCM_SIZE+LPHY_PUB_ITCM_SIZE+LPHY_PRV_DTCM_SIZE+LPHY_PRV_ITCM_SIZE+LPHY_PRV_DTCM_SIZE,LPHY_PRV_ITCM_SIZE);
-        if(ret != LPHY_PRV_ITCM_SIZE)
-            goto err1;
-        dump_fetal("[dump]: save %s finished!\n",file_name);
-    err1:
-        bsp_close(fd);
-    }
 
 }
 /*****************************************************************************
@@ -205,49 +120,6 @@ err0:
 
 void dump_save_lphy_tcm(char * dst_path)
 {
-    bool flag = false;
-    struct dsp_dump_proc_flag *tl_flag = NULL;
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
 
-    if(cfg->file_list.file_bits.lphy_tcm == 0)
-    {
-        return;
-    }
-
-    lphy_image_ddr_addr = (char *)ioremap_wc(MDDR_FAMA(DDR_TLPHY_IMAGE_ADDR), DDR_TLPHY_IMAGE_SIZE);
-    if(NULL == lphy_image_ddr_addr)
-    {
-        dump_fetal("ioremap DDR_TLPHY_IMAGE_ADDR fail\n");
-        return;
-    }
-
-    tl_flag = (struct dsp_dump_proc_flag *)((unsigned long)SHM_BASE_ADDR + SHM_OFFSET_DSP_FLAG);
-    if(SAVE_TCM_BEGIN == tl_flag->dsp_dump_flag)
-    {
-        dump_fetal("carry tldsp tcm to ddr not finished!\n");
-        flag = true;
-    }
-    else if(SAVE_TCM_END == tl_flag->dsp_dump_flag)
-    {
-        flag = true;
-    }
-    else
-    {
-        flag = false;
-    }
-
-    /*DSP DDR内存分布参考hi_dsp.h*/
-    if(flag == true)
-    {
-        dump_save_all_tcm(lphy_image_ddr_addr,dst_path);
-    }
-    else if(dump_get_edition_type() == EDITION_INTERNAL_BETA)
-    {
-        dump_save_some_tcm(lphy_image_ddr_addr,dst_path);
-    }
-    tl_flag->dsp_dump_flag = 0;
-
-    iounmap(lphy_image_ddr_addr);
-    return;
 }
 

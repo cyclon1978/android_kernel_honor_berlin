@@ -49,7 +49,7 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/syscalls.h>
-#include <linux/kernel.h> 
+#include <linux/kernel.h>
 #include <asm/string.h>
 #include <linux/kthread.h>
 #include <linux/timer.h>
@@ -120,30 +120,7 @@ void dump_memcpy(u32 * dst, const u32 * src, u32 len)
 *****************************************************************************/
 void dump_save_modem_sysctrl(void)
 {
-    u32 * field_addr = NULL;
-    u32 * reg_addr = NULL;
-    u32 reg_size = 0;
 
-    field_addr = (u32 *)bsp_dump_get_field_addr(DUMP_CP_SYSCTRL);
-    if(field_addr == NULL)
-    {
-        dump_fetal("SYSCTRL field addr is NULL\n");
-        return;
-    }
-
-    /* sysctrl mdm */
-    reg_addr = (u32 *)bsp_sysctrl_addr_byindex(sysctrl_mdm);
-    reg_size = 0x1000;
-
-    /* coverity[dereference] */
-    dump_memcpy(field_addr, reg_addr, reg_size >> 2);
-    *(field_addr + (reg_size >> 2) - 4) = (u32)OM_SYSCTRL_MAGIC;
-    *(field_addr + (reg_size >> 2) - 3) = (uintptr_t)bsp_sysctrl_addr_phy_byindex(sysctrl_mdm);
-    *(field_addr + (reg_size >> 2) - 2) = reg_size;
-    *(field_addr + (reg_size >> 2) - 1) = 0;
-    //field_addr = field_addr + (reg_size >> 2);
-
-    dump_fetal("dump_save_modem_sysctrl finish\n");
 }
 
 /*****************************************************************************
@@ -161,21 +138,7 @@ void dump_save_modem_sysctrl(void)
 *****************************************************************************/
 void dump_map_mdm_ddr(void)
 {
-    dump_product_type_t type = dump_get_product_type();
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
 
-    dump_fetal("mdm_ddr= %d,type=%d\n",cfg->file_list.file_bits.mdm_ddr,type);
-
-    if(cfg->file_list.file_bits.mdm_ddr == 1 && type == DUMP_PHONE )
-    {
-        g_modem_ddr_map_addr = (u8 *)ioremap_wc((phys_addr_t)(MDDR_FAMA(DDR_MCORE_ADDR)), (size_t)(DDR_MCORE_SIZE));
-
-        if(g_modem_ddr_map_addr == NULL)
-        {
-            dump_fetal("map g_modem_ddr_map_addr fail\n");
-        }
-    }
-    dump_fetal("dump_memmap_modem_ddr finish\n");
 }
 
 /*****************************************************************************
@@ -193,28 +156,7 @@ void dump_map_mdm_ddr(void)
 *****************************************************************************/
 void dump_save_mdm_ddr_file(char* dir_name)
 {
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
 
-    if(cfg->file_list.file_bits.mdm_ddr == 1
-        && (dump_get_product_type() == DUMP_PHONE)
-        && (EDITION_INTERNAL_BETA == dump_get_edition_type()))
-    {
-        /*coverity[secure_coding]*/
-        memset(file_name, 0, sizeof(file_name));
-        /*coverity[secure_coding]*/
-        snprintf(file_name, sizeof(file_name), "%smodem_ddr.bin", dir_name);
-
-        if(NULL == g_modem_ddr_map_addr)
-        {
-            dump_fetal("ioremap MODEM DDR fail\n");
-        }
-        else
-        {
-            dump_save_file(file_name, g_modem_ddr_map_addr, DDR_MCORE_SIZE);
-            dump_fetal("[dump]: save %s finished\n", file_name);
-        }
-    }
 }
 
 /*****************************************************************************
@@ -232,27 +174,7 @@ void dump_save_mdm_ddr_file(char* dir_name)
 *****************************************************************************/
 void dump_save_mdm_dts_file(char* dir_name)
 {
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
-    u8* addr = (u8 *)ioremap_wc((phys_addr_t)(MDDR_FAMA(DDR_MCORE_DTS_ADDR)), (size_t)(DDR_MCORE_DTS_SIZE));
 
-    if(cfg->file_list.file_bits.mdm_dts == 1
-        && (dump_get_product_type() == DUMP_PHONE)
-        && (EDITION_INTERNAL_BETA == dump_get_edition_type()))
-    {
-        memset(file_name, 0, sizeof(file_name));
-        snprintf(file_name, sizeof(file_name), "%smodem_dts.bin", dir_name);
-
-        if(NULL == addr)
-        {
-            dump_fetal("ioremap DDR_MCORE_DTS_ADDR fail\n");
-        }
-        else
-        {
-            dump_save_file(file_name, addr, DDR_MCORE_DTS_SIZE);
-            dump_fetal("[dump]: save %s finished\n", file_name);
-        }
-    }
 }
 /*****************************************************************************
 * 函 数 名  : dump_cp_wdt_hook
@@ -288,39 +210,7 @@ void dump_cp_wdt_hook(void)
 *****************************************************************************/
 void dump_get_cp_task_name_by_id(u32 task_id, char* task_name)
 {
-    dump_task_info_s * temp_task_name = NULL;
-    u8* task_name_table = NULL;
-    u32 task_cnt = 0;
-    u32 task_index = 0;
 
-
-    /*CP存储任务名的区域*/
-    task_name_table = bsp_dump_get_field_addr(DUMP_CP_ALLTASK_NAME);
-    if(NULL == task_name_table)
-    {
-        dump_fetal("get cp task name ddr fail\n");
-        return;
-    }
-
-    task_cnt = *((u32 *)task_name_table + 3)/4;
-
-    /* 偏移10字节，去掉队列头 */
-    task_name_table += 0x10;
-    temp_task_name = (dump_task_info_s *)task_name_table;
-    dump_fetal("task_cnt:0x%x\n", task_cnt);
-
-    /*查找任务名*/
-    for(task_index = 0;task_index < task_cnt; task_index++)
-    {
-        if(temp_task_name->task_id == task_id)
-        {
-            dump_fetal("reboot task:%s\n", temp_task_name->task_name);
-            /*coverity[secure_coding]*/
-            memcpy(task_name,temp_task_name->task_name,12);
-            break;
-        }
-        temp_task_name++;
-    }
 
 }
 
@@ -341,56 +231,6 @@ void dump_get_cp_task_name_by_id(u32 task_id, char* task_name)
 void dump_save_cp_base_info(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 length)
 {
 
-    dump_base_info_t* modem_cp_base_info = NULL;
-    dump_cpu_info_t* modem_cp_cpuinfo = NULL;
-
-    modem_cp_base_info = (dump_base_info_t*)bsp_dump_get_field_addr(DUMP_CP_BASE_INFO_SMP);
-    if(modem_cp_base_info == NULL)
-    {
-        dump_fetal("get cp base info fail\n");
-        return;
-    }
-
-    modem_cp_base_info->modId = mod_id;
-    modem_cp_base_info->arg1 = arg1;
-    modem_cp_base_info->arg2 = arg2;
-    modem_cp_base_info->arg3 = (u32)(uintptr_t)data;
-    modem_cp_base_info->arg3_length = length;
-    modem_cp_base_info->reboot_time = bsp_get_slice_value();
-
-    if(modem_cp_base_info->cpu_max_num == 1)
-    {
-        modem_cp_base_info->reboot_cpu = 0;
-
-        modem_cp_cpuinfo = (dump_cpu_info_t*)bsp_dump_get_field_addr(DUMP_CP_CPUINFO);
-        if(modem_cp_cpuinfo == NULL)
-        {
-            dump_fetal("get modem_cp_cpuinfo fail\n");
-            return;
-        }
-
-        if(modem_cp_cpuinfo->current_ctx == DUMP_CTX_TASK)
-        {
-            modem_cp_base_info->reboot_task = modem_cp_cpuinfo->current_task;
-            dump_get_cp_task_name_by_id( modem_cp_base_info->reboot_task,(char*)(modem_cp_base_info->taskName));
-            modem_cp_base_info->reboot_int = (u32)(-1);
-        }
-        else
-        {
-            modem_cp_base_info->reboot_task = (u32)(-1);
-            modem_cp_base_info->reboot_int = modem_cp_cpuinfo->current_int;
-
-        }
-
-    }
-    else
-    {
-        /*boston上看门狗和总线挂死没有办法区分是哪个核*/
-    }
-
-
-    dump_fetal("save cp base info finish\n");
-    return;
 }
 
 
@@ -410,34 +250,7 @@ void dump_save_cp_base_info(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 leng
 *****************************************************************************/
 s32 dump_wait_cp_save_done(u32 ms,bool wait)
 {
-    u32 time_start = 0;
-
-    time_start = bsp_get_elapse_ms();
-
-    do{
-
-        if( BSP_OK == dump_get_cp_save_done())
-        {
-            dump_fetal("cp save done\n");
-            return BSP_OK;
-        }
-
-        if(ms <= (bsp_get_elapse_ms()-time_start))
-        {
-            dump_fetal("dump save max time out\n");
-            return BSP_ERROR;
-        }
-
-        if(wait)
-        {
-            msleep(10);
-        }
-
-    }while(1);
-    /*lint -e527 -esym(527,*)*/
-    return BSP_ERROR;
-    /*lint -e527 +esym(527,*)*/   
-
+    return BSP_OK;
 }
 
 /*****************************************************************************
@@ -455,65 +268,7 @@ s32 dump_wait_cp_save_done(u32 ms,bool wait)
 *****************************************************************************/
 void dump_cp_agent_handle(s32 param)
 {
-    dump_base_info_t* modem_cp_base_info = NULL;
-    u32 rdr_mod_id = 0;
-    dump_reboot_reason_t reboot_reason ;
-
-    dump_fetal("[0x%x]================ modem ccore enter system error! ================\n", bsp_get_slice_value());
-
-    if(true == dump_check_has_error())
-    {
-        return;
-    }
-
-    bsp_wdt_irq_disable(WDT_CCORE_ID);
-    dump_fetal("stop cp wdt finish\n");
-
-    bsp_coresight_disable();
-
-    modem_cp_base_info = (dump_base_info_t*)bsp_dump_get_field_addr(DUMP_CP_BASE_INFO_SMP);
-
-    if(modem_cp_base_info != NULL)
-    {
-        reboot_reason = modem_cp_base_info->modId != DRV_ERRNO_DUMP_ARM_EXC ? DUMP_REASON_NORMAL : DUMP_REASON_ARM;
-    }
-    else
-    {
-        return;
-    }
-
-    dump_set_reboot_contex(DUMP_CPU_COMM, reboot_reason);
-
-    dump_fetal("exc core is = 0x%x,exc reason is 0x%x,modid = 0x%x\n",DUMP_CPU_COMM,reboot_reason,modem_cp_base_info->modId);
-
-    if(DUMP_MBB == dump_get_product_type())
-    {
-        if(modem_cp_base_info != NULL)
-        {
-            rdr_mod_id = modem_cp_base_info->modId & 0xF0000000;
-        }
-    }
-    else
-    {
-        if(modem_cp_base_info->modId == DRV_ERRNO_NOC)
-        {
-            rdr_mod_id = RDR_MODEM_AP_NOC_MOD_ID;
-        }
-        else
-        {
-            rdr_mod_id = RDR_MODEM_CP_MOD_ID;
-        }
-    }
-
-    dump_save_base_info(BSP_MODU_OTHER_CORE,0,0,0,0);
-
-    if(DUMP_PHONE == dump_get_product_type())
-    {
-        dump_save_modem_sysctrl();
-
-        dump_save_balong_rdr_info(rdr_mod_id);
-    }
-    g_rdr_mod_id = rdr_mod_id;
+    g_rdr_mod_id = RDR_MODEM_CP_MOD_ID;
 
     up(&g_cp_agent_sem);
 
@@ -537,28 +292,7 @@ void dump_cp_agent_handle(s32 param)
 *****************************************************************************/
 void dump_notify_cp(u32 mod_id)
 {
-    s32 ret ;
-    dump_reboot_cpu_t core =  DUMP_CPU_BUTTON;
-    dump_reboot_reason_t reason = DUMP_REASON_UNDEF;
 
-    dump_get_reboot_contex((u32*)&core, (u32*)&reason);
-
-    if(core == DUMP_CPU_COMM && (reason != DUMP_REASON_WDT && reason != DUMP_REASON_DLOCK))
-    {
-        dump_fetal("CP exception ,no need to notify C core 0x%x\n", mod_id);
-    }
-    else
-    {
-        ret = bsp_ipc_int_send(IPC_CORE_CCORE, IPC_CCPU_SRC_ACPU_DUMP);
-        if(ret == BSP_OK)
-        {
-            dump_fetal("notify modem ccore success \n");
-        }
-        else
-        {
-            dump_fetal("notify modem ccore fail,please let ipc check \n");
-        }
-    }
 }
 
 /*****************************************************************************
@@ -576,10 +310,6 @@ void dump_notify_cp(u32 mod_id)
 *****************************************************************************/
 void dump_cp_wdt_proc(void)
 {
-    bsp_coresight_stop_cp();
-    dump_save_cp_base_info(DRV_ERRNO_DUMP_CP_WDT, DUMP_REASON_WDT, 0, NULL, 0);
-    dump_set_reboot_contex(DUMP_CPU_COMM,DUMP_REASON_WDT);
-    dump_fetal("dump_cp_wdt_proc finish \n");
 }
 /*****************************************************************************
 * 函 数 名  : dump_cp_wdt_proc
@@ -596,10 +326,6 @@ void dump_cp_wdt_proc(void)
 *****************************************************************************/
 void dump_cp_dlock_proc(void)
 {
-    bsp_coresight_stop_cp();
-    dump_save_cp_base_info(DRV_ERRNO_DLOCK, DUMP_REASON_DLOCK, 0, NULL, 0);
-    dump_set_reboot_contex(DUMP_CPU_COMM,DUMP_REASON_DLOCK);
-    dump_fetal("dump_cp_dlock_proc finish \n");
 }
 
 /*****************************************************************************
@@ -653,7 +379,6 @@ s32 dump_cp_task_init(void)
     pid = (struct task_struct *)kthread_run(dump_cp_task, 0, "dump_cp_task");
     if (IS_ERR((void*)pid))
     {
-        dump_error("dump_cp_task_init[%d]: create kthread task failed! ret=%p\n", __LINE__, pid);
         return BSP_ERROR;
     }
     param.sched_priority = 97;
@@ -709,7 +434,7 @@ s32 dump_cp_agent_init(void)
     {
         dump_fetal("dump_register_hook fail\n");
     }
-    
+
     return BSP_OK;
 
 }
@@ -728,16 +453,6 @@ s32 dump_cp_agent_init(void)
 *****************************************************************************/
 void dump_save_cp_logs(char* dir_name)
 {
-    dump_save_mdm_ddr_file(dir_name);
-
-    bsp_coresight_save_cp_etb(dir_name);
-
-    dump_save_mdm_dts_file(dir_name);
-
-    dump_save_lphy_tcm(dir_name);
-
-    dump_save_cphy_tcm(dir_name);
-
 
 }
 /*****************************************************************************
@@ -755,36 +470,6 @@ void dump_save_cp_logs(char* dir_name)
 *****************************************************************************/
 void dump_cp_timeout_proc(void)
 {
-    s32 ret ;
-    dump_reboot_cpu_t core =  DUMP_CPU_BUTTON;
-    dump_reboot_reason_t reason = DUMP_REASON_UNDEF;
 
-    dump_get_reboot_contex((u32*)&core, (u32*)&reason);
-
-    if(core == DUMP_CPU_COMM && (reason != DUMP_REASON_WDT && reason != DUMP_REASON_DLOCK))
-    {
-        dump_fetal("CP exception ,no need send fiq 0x%x\n", reason);
-        return;
-    }
-
-    ret = bsp_send_cp_fiq(FIQ_DUMP);
-    if(ret == BSP_ERROR)
-    {
-       bsp_coresight_stop_cp();
-       dump_fetal("send fiq fail\n");
-    }
-    else
-    {
-        dump_fetal("trig fiq process success\n");
-    }
-    ret = dump_wait_cp_save_done(5000, true);
-    if(ret == BSP_ERROR)
-    {
-        dump_fetal("ipc fiq save log both fail\n");
-    }
-    else
-    {
-        dump_fetal("fiq save log success\n");
-    }
 }
 

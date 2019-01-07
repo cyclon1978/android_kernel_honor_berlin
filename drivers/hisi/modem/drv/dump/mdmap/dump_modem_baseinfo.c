@@ -45,7 +45,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
- 
+
 #include <linux/slab.h>
 #include <linux/syscalls.h>
 #include <linux/kernel.h>
@@ -72,71 +72,7 @@ dump_base_info_t*    g_mdm_dump_base_info = NULL;
 *****************************************************************************/
 void dump_save_base_info(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 length)
 {
-    struct task_struct *task = NULL;
-    if(g_mdm_dump_base_info == NULL)
-    {
-        return;
-    }
-    g_mdm_dump_base_info->modId = mod_id;
-    g_mdm_dump_base_info->arg1 = arg1;
-    g_mdm_dump_base_info->arg2 = arg2;
-    g_mdm_dump_base_info->arg3 = (u32)(uintptr_t)data;
-    g_mdm_dump_base_info->arg3_length = length;
 
-    if(BSP_MODU_OTHER_CORE == g_mdm_dump_base_info->modId)
-    {
-        g_mdm_dump_base_info->reboot_task = (u32)(-1);
-        g_mdm_dump_base_info->reboot_int = (u32)(-1);
-    }
-    else
-    {
-        g_mdm_dump_base_info->reboot_time = bsp_get_slice_value();
-
-        if(in_interrupt())
-        {
-            g_mdm_dump_base_info->reboot_task = (u32)(-1);
-            memset(g_mdm_dump_base_info->taskName, 0, sizeof(g_mdm_dump_base_info->taskName));
-
-            if(DUMP_MBB == dump_get_product_type())
-            {
-                //g_mdm_dump_base_info->reboot_int = g_mdm_dump_base_info->current_int;
-            }
-            else
-            {
-                g_mdm_dump_base_info->reboot_int = 0xAAAABBBB;
-            }
-            g_mdm_dump_base_info->reboot_context = DUMP_CTX_INT;
-        }
-        else
-        {
-            g_mdm_dump_base_info->reboot_task_tcb= (u32)(uintptr_t)current;
-
-            if(g_mdm_dump_base_info->modId == 0x11000025 || g_mdm_dump_base_info->modId == 0x1100002A)
-            {
-                /* A核VOS只记录的任务的pid*/
-                g_mdm_dump_base_info->reboot_task_tcb = g_mdm_dump_base_info->arg1;
-                task = find_task_by_vpid(g_mdm_dump_base_info->arg1);
-            }
-            else
-            {
-                g_mdm_dump_base_info->reboot_task =  (u32)(((struct task_struct *)(current))->pid);
-                task = (struct task_struct *)(current);
-            }
-            if(task != NULL)
-            {
-                /*coverity[secure_coding]*/
-                memset(g_mdm_dump_base_info->taskName,0,16);
-                /*coverity[secure_coding]*/
-                memcpy(g_mdm_dump_base_info->taskName,((struct task_struct *)(task))->comm, 16);
-                dump_fetal("g_mdm_dump_base_info->taskName = %s\n",g_mdm_dump_base_info->taskName);
-            }
-            g_mdm_dump_base_info->reboot_int = (u32)(-1);
-            g_mdm_dump_base_info->reboot_context = DUMP_CTX_TASK;
-
-        }
-    }
-
-    dump_fetal("save base info finish\n");
     return;
 }
 
@@ -155,24 +91,7 @@ void dump_save_base_info(u32 mod_id, u32 arg1, u32 arg2, char *data, u32 length)
 *****************************************************************************/
 void dump_save_momdem_reset_baseinfo(u32 modid,char* name)
 {
-    u32 len = 0;
-    g_mdm_dump_base_info->modId = modid;
-    g_mdm_dump_base_info->arg1 = 0;
-    g_mdm_dump_base_info->arg2 = 0;
-    g_mdm_dump_base_info->arg3 = 0;
-    g_mdm_dump_base_info->arg3_length = 0;
-    g_mdm_dump_base_info->reboot_time = bsp_get_slice_value();
 
-    if(name != NULL)
-    {
-        len = strlen(name);
-        /*coverity[secure_coding]*/
-        memcpy(g_mdm_dump_base_info->taskName,name,len > 16 ? 16 : len);
-    }
-    g_mdm_dump_base_info->reboot_context = DUMP_CTX_TASK;
-    g_mdm_dump_base_info->reboot_int= 0xFFFFFFFF;
-
-    dump_fetal("modem reset fail update base info finish modid= 0x%x\n",modid);
 }
 
 /*****************************************************************************
@@ -190,19 +109,6 @@ void dump_save_momdem_reset_baseinfo(u32 modid,char* name)
 *****************************************************************************/
 s32 dump_base_info_init(void)
 {
-    g_mdm_dump_base_info = (dump_base_info_t*)bsp_dump_get_field_addr(DUMP_MODEMAP_BASE_INFO_SMP);
-    
-    if(g_mdm_dump_base_info != NULL)
-    {
-        /*coverity[secure_coding]*/
-        memset(g_mdm_dump_base_info, 0, sizeof(dump_base_info_t));
-        g_mdm_dump_base_info->vec = 0xff;
-    }
-    else
-    {
-        return BSP_ERROR;
-    }
-    
-    dump_fetal("dump_base_info_init finish\n");
+
     return BSP_OK;
 }

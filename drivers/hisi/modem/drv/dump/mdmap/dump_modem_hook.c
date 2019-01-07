@@ -74,35 +74,7 @@ struct dump_hook_ctrl_s g_dump_hook_ctrl;
 *****************************************************************************/
 dump_handle bsp_dump_register_hook(char * name, dump_hook func)
 {
-    struct dump_hook_s* pfieldhook = NULL;
-    unsigned long flags = 0;
-
-    if(!g_dump_hook_ctrl.ulInitflag)
-    {
-        (void)bsp_dump_hook_init();
-    }
-
-    pfieldhook = (struct dump_hook_s*)osl_malloc(sizeof(struct dump_hook_s));
-    if(pfieldhook == NULL)
-    {
-        dump_fetal("malloc failed!\n");
-        return BSP_ERROR;
-    }
-    
-    /*coverity[secure_coding]*/
-    memset(pfieldhook,0,sizeof(struct dump_hook_s));
-
-    pfieldhook->pfunc = func;
-    
-    /*coverity[secure_coding]*/
-    memcpy(pfieldhook->name,name,(sizeof(pfieldhook->name)>strlen(name))?strlen(name):sizeof(pfieldhook->name));
-
-    spin_lock_irqsave(&g_dump_hook_ctrl.spinlock, flags);
-    list_add(&pfieldhook->hook_list, &g_dump_hook_ctrl.list_hook);
-    spin_unlock_irqrestore(&g_dump_hook_ctrl.spinlock, flags);
-    /*lint -e429 -esym(429,*)*/
-    return (dump_handle)((unsigned long)pfieldhook);
-    /*lint -e429 +esym(429,*)*/
+    return BSP_ERROR;
 }
 /*****************************************************************************
 * º¯ Êý Ãû  : bsp_dump_hook_callback
@@ -119,20 +91,6 @@ dump_handle bsp_dump_register_hook(char * name, dump_hook func)
 *****************************************************************************/
 void bsp_dump_hook_callback(void)
 {
-    struct list_head *p = NULL;
-    struct list_head *n = NULL;
-    struct dump_hook_s* pfieldhook = NULL;
-
-    list_for_each_safe(p,n, &g_dump_hook_ctrl.list_hook)
-    {
-        pfieldhook = list_entry(p, struct dump_hook_s, hook_list);
-        if((pfieldhook)&&(pfieldhook->pfunc))
-        {
-            pfieldhook->pfunc();
-        }
-    }
-
-    dump_fetal("save all hook finish\n");
 }
 
 /*****************************************************************************
@@ -150,15 +108,6 @@ void bsp_dump_hook_callback(void)
 *****************************************************************************/
 s32 bsp_dump_hook_init(void)
 {
-    if(true == g_dump_hook_ctrl.ulInitflag)
-    {
-        return BSP_OK;
-    }
-    spin_lock_init(&g_dump_hook_ctrl.spinlock);
-
-    INIT_LIST_HEAD(&g_dump_hook_ctrl.list_hook);
-
-    g_dump_hook_ctrl.ulInitflag = true;
 
     return BSP_OK;
 }
@@ -178,40 +127,6 @@ s32 bsp_dump_hook_init(void)
 *****************************************************************************/
 s32 bsp_dump_unregister_hook(dump_handle handle)
 {
-    struct dump_hook_s * pfieldhook = NULL;
-    struct dump_hook_s * hook_node = NULL;
-    unsigned long flags = 0;
-
-    if(!g_dump_hook_ctrl.ulInitflag)
-    {
-        printk("has not init\n");
-        return BSP_ERROR;
-    }
-
-    if(!handle)
-    {
-        printk("invalid parameter!\n");
-        return BSP_ERROR;
-    }
-
-    spin_lock_irqsave(&g_dump_hook_ctrl.spinlock, flags);
-    list_for_each_entry(pfieldhook, &g_dump_hook_ctrl.list_hook, hook_list)
-    {
-        if((dump_handle)((unsigned long)pfieldhook) == handle)
-        {
-            hook_node = pfieldhook;
-        }
-    }
-
-    if(!hook_node)
-    {
-        spin_unlock_irqrestore(&g_dump_hook_ctrl.spinlock, flags);
-        return BSP_ERROR;
-    }
-
-    list_del(&hook_node->hook_list);
-    osl_free(hook_node);
-    spin_unlock_irqrestore(&g_dump_hook_ctrl.spinlock, flags);
 
     return BSP_OK;
 }
@@ -230,18 +145,6 @@ s32 bsp_dump_unregister_hook(dump_handle handle)
 *****************************************************************************/
 void bsp_dump_show_exthook(void)
 {
-    struct list_head *p=NULL,*n = NULL;
-    struct dump_hook_s* pfieldhook = NULL;
-
-    list_for_each_safe(p,n, &g_dump_hook_ctrl.list_hook)
-    {
-        pfieldhook = list_entry(p, struct dump_hook_s, hook_list);
-        if((pfieldhook) && (pfieldhook->pfunc))
-        {
-
-            dump_fetal("name:%s,Function :%pS\n", pfieldhook->name, pfieldhook->pfunc);
-        }
-    }
 }
 
 

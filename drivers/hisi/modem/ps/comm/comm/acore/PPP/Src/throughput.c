@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997 Brian Somers <brian@Awfulhak.org>
  * All rights reserved.
  *
@@ -23,7 +25,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $FreeBSD: releng/11.1/usr.sbin/ppp/throughput.c 235822 2012-05-23 06:49:50Z delphij $
+ * $FreeBSD: releng/11.2/usr.sbin/ppp/throughput.c 330449 2018-03-05 07:26:05Z eadler $
  */
 
 #include "PPP/Inc/ppp_public.h"

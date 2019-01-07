@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1996 - 2001 Brian Somers <brian@Awfulhak.org>
  *          based on work by Toshiharu OHNO <tony-o@iij.ad.jp>
  *                           Internet Initiative Japan, Inc (IIJ)
@@ -25,7 +27,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $FreeBSD: releng/11.1/usr.sbin/ppp/lcp.h 138799 2004-12-13 12:51:19Z brian $
+ * $FreeBSD: releng/11.2/usr.sbin/ppp/lcp.h 330449 2018-03-05 07:26:05Z eadler $
  */
 #ifndef __PPP_LCP_H__
 #define __PPP_LCP_H__

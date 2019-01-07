@@ -47,7 +47,7 @@
  */
 #include <linux/slab.h>
 #include <linux/syscalls.h>
-#include <linux/kernel.h> 
+#include <linux/kernel.h>
 #include <asm/string.h>
 #include <linux/kthread.h>
 #include <linux/timer.h>
@@ -82,30 +82,6 @@ modem_dump_ctrl_s            g_dump_ctrl;
 *****************************************************************************/
 void dump_save_log_files(char * dir_name)
 {
-    s32 ret = BSP_OK;
-    
-    if(dir_name == NULL)
-    {
-        dump_fetal("dir_name is null\n");
-        return;
-    }
-
-    ret = dump_create_dir(dir_name);
-    if(ret != BSP_OK )
-    {
-        dump_fetal("creat dir fail exit\n");
-        return;
-    }
-
-    dump_fetal("[dump]: enter save log file\n");
-
-    dump_save_cp_logs(dir_name);
-
-    dump_save_mem_bin(dir_name);
-    
-    dump_save_apr_data(dir_name);
-
-    dump_fetal("dump all files save finished\n");
 
 }
 /*****************************************************************************
@@ -123,12 +99,6 @@ void dump_save_log_files(char * dir_name)
 *****************************************************************************/
 void dump_save_and_reboot(void)
 {
-    g_dump_ctrl.dump_task_job = DUMP_TASK_JOB_SAVE_REBOOT;
-
-    up(&g_dump_ctrl.sem_dump_task);
-
-    dump_fetal("up g_dump_ctrl.sem_dump_task \n");
-
     return;
 }
 
@@ -148,9 +118,6 @@ void dump_save_and_reboot(void)
 *****************************************************************************/
 int dump_save_task(void *data)
 {
-    rdr_exc_info_s* rdr_exc_info = dump_get_rdr_exc_info();
-    s32 ret = BSP_OK;
-    
     /* coverity[no_escape] */
     while(1)
     {
@@ -160,22 +127,7 @@ int dump_save_task(void *data)
 
         if(DUMP_TASK_JOB_SAVE_REBOOT == (g_dump_ctrl.dump_task_job & DUMP_TASK_JOB_SAVE_REBOOT))
         {
-            dump_fetal("begin to save modem log \n");
 
-            ret = dump_wait_cp_save_done(5000, (bool)true);
-            if(ret == BSP_ERROR)
-            {
-                dump_cp_timeout_proc();
-            }
-
-            dump_save_log_files(rdr_exc_info->log_path);
-
-            if(rdr_exc_info->dump_done != BSP_NULL)
-            {
-                rdr_exc_info->dump_done(rdr_exc_info->modid, rdr_exc_info->coreid);
-
-                dump_fetal("notify rdr dump handle finished\n");
-            }
         }
 
         g_dump_ctrl.dump_task_job = 0;
@@ -183,7 +135,7 @@ int dump_save_task(void *data)
 
     /*lint -e527 -esym(527,*)*/
     return BSP_OK;
-    /*lint -e527 +esym(527,*)*/    
+    /*lint -e527 +esym(527,*)*/
 }
 
 /*****************************************************************************
@@ -242,22 +194,6 @@ s32 dump_save_task_init(void)
 *****************************************************************************/
 void bsp_om_save_reboot_log(const char * func_name, const void* caller)
 {
-
-    struct timex txc = {0,};
-    struct rtc_time tm = {0,};
-    char log_buff[200] = {0};
-    char temp[30] = {0};
-
-    do_gettimeofday(&(txc.time));
-    rtc_time_to_tm(txc.time.tv_sec, &tm);
-    
-    /*coverity[secure_coding]*/
-    /* coverity[overrun-buffer-val] */
-    snprintf(temp, sizeof(temp), "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-    /*coverity[secure_coding]*/
-    snprintf((char*)log_buff,sizeof(log_buff) ,"system reboot reason: NORMAL_RESET A CORE, FUNC:%s, caller:%p, TIME:%s\n", func_name, caller, temp);
-    dump_append_file(OM_DUMP_PATH, OM_RESET_LOG, (void*)log_buff, (u32)(strlen(log_buff)), OM_RESET_LOG_MAX);
-    dump_fetal("bsp_om_save_reboot_log finish\n");
 
 }
 

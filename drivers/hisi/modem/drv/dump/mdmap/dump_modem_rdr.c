@@ -474,64 +474,7 @@ struct rdr_exception_info_s g_mbb_exc_info[] =
 *****************************************************************************/
 void dump_save_balong_rdr_info(u32 mod_id)
 {
-    struct timex txc = {0,};
-    struct rtc_time tm = {0,};
-    char temp[30] = {0};
-    struct dump_global_base_info_s* global_base_info = NULL;
-    struct rdr_exception_info_s* rdr_exc_info = NULL;
-    u32 i = 0;
-    dump_reboot_cpu_t core = DUMP_CPU_BUTTON;
 
-    dump_get_reboot_contex((u32*)&core,NULL);
-
-    do_gettimeofday(&(txc.time));
-    rtc_time_to_tm((unsigned long)(txc.time.tv_sec), &tm);
-    snprintf(temp, sizeof(temp), "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-    global_base_info = (struct dump_global_base_info_s*)dump_get_global_baseinfo();
-    if(global_base_info == NULL)
-    {
-        dump_fetal("get global_base_info error\n");
-        return;
-    }
-
-    for(i = 0; i < (sizeof(g_phone_exc_info)/sizeof(g_phone_exc_info[0]));i++)
-    {
-       if(g_phone_exc_info[i].e_modid == mod_id)
-       {
-            rdr_exc_info = &g_phone_exc_info[i];
-       }
-    }
-    if(rdr_exc_info == NULL)
-    {
-        dump_fetal("find rdr exc info error\n");
-        return;
-    }
-    global_base_info->modid = rdr_exc_info->e_modid;
-    global_base_info->arg1 = 0;
-    global_base_info->arg2 = 0;
-    /*coverity[secure_coding]*/
-    memcpy(global_base_info->e_module, rdr_exc_info->e_from_module,(unsigned long)16);
-    global_base_info->e_type = rdr_exc_info->e_exce_type;
-
-    /*这里为了hids工具显示，做了特殊处理，填充在rdr的ecore与注册给rdr的不一致*/
-    if(core  == DUMP_CPU_COMM)
-    {
-        global_base_info->e_core = RDR_CP;
-    }
-    else if(core  == DUMP_CPU_APP)
-    {
-        global_base_info->e_core = RDR_MODEMAP;
-    }
-    global_base_info->start_flag = DUMP_START_EXCH;
-    global_base_info->savefile_flag = DUMP_SAVE_FILE_END;
-
-    /*coverity[secure_coding]*/
-    memcpy((void*)(global_base_info->e_desc), rdr_exc_info->e_desc,(u32)(strlen((const char*)(rdr_exc_info->e_desc)) < 48 ? strlen((const char*)(rdr_exc_info->e_desc)): 48 ));
-    /*coverity[secure_coding]*/
-    memcpy(global_base_info->datetime,temp,(unsigned long)24);
-
-    dump_fetal("update modem rdr global info finish\n");
 
 }
 
@@ -585,38 +528,7 @@ void dump_save_rdr_exc_info(u32 modid, u32 etype, u64 coreid, char* logpath, pfn
 *****************************************************************************/
 void dump_callback_dmss_noc_proc(u32 modid)
 {
-    dump_reboot_reason_t reason ;
 
-    if(modid == RDR_MODEM_NOC_MOD_ID)
-    {
-        dump_fetal("[0x%x] modem NOC process\n", bsp_get_slice_value());
-    }
-    else if(modid == RDR_MODEM_DMSS_MOD_ID)
-    {
-        dump_fetal("[0x%x] modem DMSS process\n", bsp_get_slice_value());
-    }
-
-    if (dump_get_init_phase() < DUMP_INIT_FLAG_APR)
-    {
-        dump_fetal("modem dump not init direct reboot\n");
-        return;
-    }
-
-    bsp_coresight_disable();
-
-    dump_set_exc_flag(true);
-
-    reason = ((modid == RDR_MODEM_NOC_MOD_ID) ?  DUMP_REASON_NOC : DUMP_REASON_DMSS);
-
-    dump_set_reboot_contex(DUMP_CPU_APP, reason);
-
-    dump_save_base_info(modid,0,0,0,0);
-
-    if(DUMP_PHONE == dump_get_product_type())
-    {
-        dump_save_modem_sysctrl();
-        dump_save_balong_rdr_info(modid);
-    }
 
 }
 
@@ -635,32 +547,8 @@ void dump_callback_dmss_noc_proc(u32 modid)
 *****************************************************************************/
 u32 dump_callback(u32 modid, u32 etype, u64 coreid, char* logpath, pfn_cb_dump_done fndone)
 {
-    if(modid == RDR_MODEM_NOC_MOD_ID || modid == RDR_MODEM_DMSS_MOD_ID  )
-    {
-        dump_callback_dmss_noc_proc(modid);
-    }
-    else
-    {
-        dump_fetal("enter dump callback, mod id:0x%x\n", modid);
-    }
 
-    if(bsp_reset_ccore_is_reboot() == 0)
-    {
-        dump_notify_cp(modid);
-    }
-    else
-    {
-        dump_fetal("modem is reseting now,do not notify\n");
-    }
-
-    dump_save_rdr_exc_info(modid, etype, coreid, logpath, fndone);
-
-    bsp_dump_save_self_addr();
-
-    bsp_dump_hook_callback();
-
-    dump_save_and_reboot();
-
+    fndone(modid,coreid);
     return BSP_OK;
 }
 
@@ -679,27 +567,6 @@ u32 dump_callback(u32 modid, u32 etype, u64 coreid, char* logpath, pfn_cb_dump_d
 *****************************************************************************/
 void dump_reset_fail_proc(u32 rdr_modid)
 {
-    dump_reboot_reason_t reason = DUMP_REASON_RST_NOT_SUPPORT;
-    u32 fail_id = RDR_MODEM_CP_RESET_REBOOT_REQ_MOD_ID;
-    char* desc = "MDM_RST_OFF";
-
-    if(rdr_modid == RDR_MODEM_CP_RESET_REBOOT_REQ_MOD_ID)
-    {
-        dump_fetal("bsp_cp_reset is stub,reset ap\n");
-    }
-    else
-    {
-        dump_fetal("modem signal reset fail, notify rdr\n");
-        reason = DUMP_REASON_RST_FAIL;
-        desc = "MDM_RST_FAIL";
-        fail_id =  modem_reset_fail_id_get();
-    }
-
-    dump_set_reboot_contex(DUMP_CPU_APP,reason);
-
-    dump_save_momdem_reset_baseinfo(fail_id,desc);
-
-    dump_save_balong_rdr_info(rdr_modid);
 
     rdr_system_error(rdr_modid, 0, 0);
 }
@@ -719,24 +586,7 @@ void dump_reset_fail_proc(u32 rdr_modid)
 *****************************************************************************/
 void dump_reset_success_proc(void)
 {
-    u32 core = DUMP_CPU_BUTTON;
 
-    dump_set_exc_flag(false);
-
-    dump_get_reboot_contex(&core,NULL);
-
-    dump_fetal("core = 0x%x\n",core);
-
-    if(core == DUMP_CPU_COMM)
-    {
-        bsp_wdt_irq_enable(WDT_CCORE_ID);
-        dump_fetal("modem reset success enable cp wdt\n");
-
-    }
-
-    dump_base_info_init();
-
-    dump_set_reboot_contex(DUMP_CPU_BUTTON,DUMP_REASON_UNDEF);
 }
 
 /*****************************************************************************

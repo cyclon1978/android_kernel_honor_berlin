@@ -47,7 +47,7 @@
  */
 #include <linux/slab.h>
 #include <linux/syscalls.h>
-#include <linux/kernel.h> 
+#include <linux/kernel.h>
 #include <asm/string.h>
 #include "bsp_sram.h"
 #include "bsp_shared_ddr.h"
@@ -74,24 +74,6 @@
 *****************************************************************************/
 void dump_save_mntn_bin(char* dir_name)
 {
-    struct dump_global_area_ctrl_s global_area = {0,};
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    s32 ret;
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
-
-    if(cfg->file_list.file_bits.mdm_dump == 1  && (dump_get_product_type()== DUMP_PHONE))
-    {
-        memset(file_name, 0, sizeof(file_name));
-        /*coverity[secure_coding]*/
-        snprintf(file_name, sizeof(file_name), "%smodem_dump.bin", dir_name);
-        ret = dump_get_global_info(&global_area);
-        if(ret == BSP_OK && global_area.virt_addr != NULL)
-        {
-            dump_save_file(file_name, (u8 *)global_area.virt_addr, global_area.length);
-            dump_fetal("[dump]: save %s finished\n", file_name);
-        }
-
-    }
 }
 
 /*****************************************************************************
@@ -109,17 +91,7 @@ void dump_save_mntn_bin(char* dir_name)
 *****************************************************************************/
 void dump_save_mdm_sram_file(char* dir_name)
 {
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
 
-    if((cfg->file_list.file_bits.mdm_sram == 1)&&(EDITION_INTERNAL_BETA == dump_get_edition_type()))
-    {
-        memset(file_name, 0, sizeof(file_name));
-        /*coverity[secure_coding]*/
-        snprintf(file_name, sizeof(file_name), "%smodem_sram.bin", dir_name);
-        dump_save_file(file_name, (u8 *)g_mem_ctrl.sram_virt_addr, g_mem_ctrl.sram_mem_size);
-        dump_fetal("[dump]: save %s finished\n", file_name);
-    }
 }
 
 
@@ -138,26 +110,6 @@ void dump_save_mdm_sram_file(char* dir_name)
 *****************************************************************************/
 void dump_save_mdm_secshare_file(char* dir_name)
 {
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
-    void* addr = NULL;
-    /*lint -save -e835*/
-    if(cfg->file_list.file_bits.mdm_secshare == 1  
-        && (dump_get_product_type()== DUMP_PHONE) 
-        && (EDITION_INTERNAL_BETA == dump_get_edition_type()))
-    {
-        addr = ioremap_wc((phys_addr_t)(MDDR_FAMA(DDR_SEC_SHARED_ADDR)),(size_t)(DDR_SEC_SHARED_SIZE));
-        if(addr == NULL)
-        {
-            return;
-        }
-        memset(file_name, 0, sizeof(file_name));
-        /*coverity[secure_coding]*/
-        snprintf(file_name, sizeof(file_name), "%smodem_secshared.bin", dir_name);
-        dump_save_file(file_name, addr, DDR_SEC_SHARED_SIZE);
-        dump_fetal("[dump]: save %s finished\n", file_name);
-    }
-    /*lint -restore +e835*/
 
 }
 
@@ -176,19 +128,6 @@ void dump_save_mdm_secshare_file(char* dir_name)
 *****************************************************************************/
 void dump_save_mdm_share_file(char* dir_name)
 {
-    char file_name[MODEM_DUMP_FILE_NAME_LENGTH] = {0,};
-    DUMP_FILE_CFG_STRU* cfg = dump_get_file_cfg();
-
-    if(cfg->file_list.file_bits.mdm_share == 1  
-        && (dump_get_product_type()== DUMP_PHONE) 
-        && (EDITION_INTERNAL_BETA == dump_get_edition_type()))
-    {
-        memset(file_name, 0, sizeof(file_name));
-        /*coverity[secure_coding]*/
-        snprintf(file_name, sizeof(file_name), "%smodem_share.bin", dir_name);
-        dump_save_file(file_name, (u8 *)g_mem_ctrl.sddr_virt_addr, g_mem_ctrl.sddr_mem_size);
-        dump_fetal("[dump]: save %s finished\n", file_name);
-    }
 }
 
 
@@ -207,9 +146,4 @@ void dump_save_mdm_share_file(char* dir_name)
 *****************************************************************************/
 void dump_save_mem_bin(char* dir_name)
 {
-    dump_save_mntn_bin(dir_name);
-    dump_save_mdm_share_file(dir_name);
-    dump_save_mdm_sram_file(dir_name);
-    dump_save_mdm_secshare_file(dir_name);
-
 }

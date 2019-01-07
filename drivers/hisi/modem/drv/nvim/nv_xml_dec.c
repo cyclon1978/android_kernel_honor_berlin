@@ -480,6 +480,7 @@ XML_RESULT_ENUM_UINT32 xml_write_nv_data(void)
     nv_file_info_s file_info = {0};
     u32 ulPropertyIndex;
     u8* ref_offset = NULL;
+    nv_ctrl_info_s* ctrl_info = (nv_ctrl_info_s*)NV_GLOBAL_CTRL_INFO_ADDR;
 
     /* 如果当前节点不是有效的节点,则不做任何处理 */
     if (XML_PRODUCT_NODE_STATUS_INVALID == xml_ctrl.g_stlxmlproductinfo.envalidnode)
@@ -582,7 +583,14 @@ XML_RESULT_ENUM_UINT32 xml_write_nv_data(void)
         nv_printf("comm xml modem = 0x%x, diff xml modem = 0x%x\n", ref_info.modem_num ,xml_ctrl.card_type);
         return BSP_ERR_NV_XML_CFG_ERR;
     }
-    ref_info.nv_off += (xml_ctrl.card_type - NV_USIMM_CARD_1)*ref_info.nv_len;
+    if((ctrl_info->crc_mark)&NV_CTRL_MODEM_CRC)
+    {
+        ref_info.nv_off += (xml_ctrl.card_type - NV_USIMM_CARD_1)*(ref_info.nv_len + 4);
+    }
+    else
+    {
+        ref_info.nv_off += (xml_ctrl.card_type - NV_USIMM_CARD_1)*ref_info.nv_len;
+    }
 
     returnval = xml_nv_write_to_mem(xml_ctrl.g_puclnvitem,ref_info.nv_len,file_info.file_id,ref_info.nv_off);
     if(returnval)
