@@ -24,6 +24,9 @@
 #ifdef CONFIG_TCPC_CLASS
 #include <huawei_platform/usb/hw_pd_dev.h>
 #endif
+#ifdef CONFIG_USB_FASTCHARGE
+#include <linux/cyclox_cfg.h>
+#endif
 
 #define HWLOG_TAG charging_core
 HWLOG_REGIST();
@@ -34,6 +37,23 @@ static u32 BASP_VOL_SEGMENT_PARA[BASP_PARA_LEVEL][BASP_VOL_SEGMENT_COLUMN-1] = {
 
 static int vdpm_first_run = FIRST_RUN_TRUE;
 static int sbatt_running_first = 1;
+
+#ifdef CONFIG_USB_FASTCHARGE
+void setFastcharge(bool active, int usb_limit, int chg_limit) {
+	if (active) {
+		// USB3 maximum is 900mA
+		g_core_info->data.iin_usb = usb_limit; // USB_FASTCHARGE_CURRENT_LIMIT;
+
+		// use only up to 686mA for charging
+		g_core_info->data.ichg_usb = chg_limit; // USB_FASTCHARGE_CHARGE_LIMIT;
+	} else {
+		g_core_info->data.iin_usb = USB_NORMALCHARGE_CURRENT_LIMIT;
+		g_core_info->data.ichg_usb = USB_NORMALCHARGE_CHARGE_LIMIT;
+	}
+	hwlog_debug("iin_usb = %d\n", g_core_info->data.iin_usb);
+	hwlog_debug("ichg_usb = %d\n", g_core_info->data.ichg_usb);
+}
+#endif
 
 /**********************************************************
 *  Function:       stop_charging_core_config
@@ -904,6 +924,12 @@ static int charge_core_parse_dts(struct device_node *np,
 		return -EINVAL;
 	}
 	hwlog_debug("ichg_usb = %d\n", di->data.ichg_usb);
+#ifdef CONFIG_USB_FASTCHARGE
+	if (isFastchargeEnabled()) {
+		di->data.iin_usb = USB_FASTCHARGE_CURRENT_LIMIT;
+		di->data.ichg_usb = USB_FASTCHARGE_CHARGE_LIMIT;
+	}
+#endif	
 	/*nonstandard charge current */
 	ret = of_property_read_u32(np, "iin_nonstd", &(di->data.iin_nonstd));
 	if (ret) {
