@@ -33,6 +33,10 @@
 #include <linux/power/hisi/charger/hisi_charger.h>
 #endif
 
+#ifdef CONFIG_USB_FASTCHARGE
+#include <linux/cyclox_cfg.h>
+#endif
+
 #include <linux/power/hisi/coul/hisi_coul_drv.h>
 #include <linux/power/hisi/hisi_bci_battery.h>
 #include <hisi_scharger_v200.h>
