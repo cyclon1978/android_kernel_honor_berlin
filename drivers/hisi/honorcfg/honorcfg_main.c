@@ -27,6 +27,10 @@
 
 /* Flag to disable/enable darkness mod (disable backlight at lowest brightness setting) */
 unsigned int darkness_mod_enable = 1;
+/* start brightness for darkness mod aka minimum system brightness */
+unsigned int darkness_mod_base = 0;
+#define DARKNESS_MOD_BASE_MAX 10
+int darkness_mod_brightness = 0;
 
 /* Flag to disable/enable overclocking and force 2362000 as scaling_max_freq for big cluster cpus */
 unsigned int overclock_enable = 0;
@@ -40,6 +44,16 @@ int isDarknessModEnabled(void) {
 	return darkness_mod_enable;
 }
 EXPORT_SYMBOL_GPL(isDarknessModEnabled);
+
+void setDarknessModBrightness(int brightness) {
+	darkness_mod_brightness = brightness;
+}
+EXPORT_SYMBOL_GPL(setDarknessModBrightness);
+
+int getDarknessModBase(void) {
+	return darkness_mod_base;
+}
+EXPORT_SYMBOL_GPL(getDarknessModBase);
 
 int isOverclockEnabled(void) {
 	return overclock_enable;
@@ -67,6 +81,32 @@ static ssize_t darkness_mod_enable_store(struct kobject *kobj,
 		return -EINVAL;
 	if (darkness_mod_enable != input) {
 		darkness_mod_enable = input;
+	}
+	return ret;
+}
+
+static ssize_t darkness_mod_brightness_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, (unsigned long)16,"%u\n", darkness_mod_brightness);
+}
+
+static ssize_t darkness_mod_base_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, (unsigned long)16,"%u\n", darkness_mod_base);
+}
+
+static ssize_t darkness_mod_base_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t n)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1 || input > DARKNESS_MOD_BASE_MAX)
+		return -EINVAL;
+	if (darkness_mod_base != input) {
+		darkness_mod_base = input;
 	}
 	return ret;
 }
@@ -163,6 +203,23 @@ static struct kobj_attribute darkness_mod_enable_attr = {
 	.store  = darkness_mod_enable_store,
 };
 
+static struct kobj_attribute darkness_mod_brightness_attr = {
+	.attr   = {
+		.name = "darkness_mod_brightness",
+		.mode = 0444,
+	},
+	.show   = darkness_mod_brightness_show,
+};
+
+static struct kobj_attribute darkness_mod_base_attr = {
+	.attr   = {
+		.name = "darkness_mod_base",
+		.mode = 0664,
+	},
+	.show   = darkness_mod_base_show,
+	.store  = darkness_mod_base_store,
+};
+
 static struct kobj_attribute overclock_enable_attr = {
 	.attr   = {
 		.name = "overclock_enable",
@@ -201,6 +258,8 @@ static struct kobj_attribute fastcharge_chg_limit_attr = {
 
 static struct attribute *attrs[] = {
 	&darkness_mod_enable_attr.attr,
+	&darkness_mod_brightness_attr.attr,
+	&darkness_mod_base_attr.attr,
 	&overclock_enable_attr.attr,
 	&fastcharge_enable_attr.attr,
 	&fastcharge_usb_limit_attr.attr,

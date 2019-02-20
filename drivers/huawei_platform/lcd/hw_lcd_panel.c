@@ -1242,11 +1242,8 @@ static int hw_lcd_remove(struct platform_device* pdev)
 #ifdef CONFIG_HUAWEI_LCD_PANEL_DARKNESS_MOD
 static const int lookupBlLevel[256] =
 {
-  0, // [0]
-  0, // [1]
-  0, // [2] 0..2 Screen off
-  0, // [3] Screen on, darkest possible
-  1, // [4] should be 1
+  0,
+  1,
   2,
   3,
   4,
@@ -1288,7 +1285,8 @@ static const int lookupBlLevel[256] =
  40,
  41,
  42,
- 44, // step up
+ 43,
+ 44,
  45,
  46,
  47,
@@ -1372,7 +1370,8 @@ static const int lookupBlLevel[256] =
 125,
 126,
 127,
-129, // step up
+128,
+129,
 130,
 131,
 132,
@@ -1456,7 +1455,8 @@ static const int lookupBlLevel[256] =
 210,
 211,
 212,
-214, // step up
+213,
+214,
 215,
 216,
 217,
@@ -1515,10 +1515,28 @@ uint32_t recalculate_bl_level(uint32_t level) {
 	// 0..2 -> 0
 	// 3..255 -> remap to 0..255
 	
-	if (level < 0 || level > 255)
-		return level;
+	int target = level;
+
+	if (level < 0 || level > 255) {
+		setDarknessModBrightness(target);
+		return target;
+	}
 	
-	return lookupBlLevel[level];
+	int base = getDarknessModBase();
+
+	// from base..127 reduce level with base
+	// from 128..255 normal behaviour 
+	if ((level > 127) || (base == 0)) {
+		target = lookupBlLevel[level];
+	} else {
+		if (level < base) {
+			target = lookupBlLevel[0];
+		} else {
+			target = lookupBlLevel[level-base];
+		}
+	}
+	setDarknessModBrightness(target);
+	return target;
 }
 #endif
 
