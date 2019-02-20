@@ -14,6 +14,8 @@
 
 #ifdef CONFIG_HUAWEI_LCD_PANEL_DARKNESS_MOD
 int isDarknessModEnabled(void);
+int getDarknessModBase(void);
+void setDarknessModBrightness(int brightness);
 #endif
 
 #ifdef CONFIG_OVERCLOCK_AS_KIRIN_655
