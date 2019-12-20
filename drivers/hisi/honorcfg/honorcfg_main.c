@@ -36,7 +36,7 @@ int darkness_mod_brightness = 0;
 unsigned int overclock_enable = 0;
 
 /* Flags for usb fastcharge */
-unsigned int fastcharge_enable = 1;
+unsigned int fastcharge_enable = 0;
 unsigned int fastcharge_usb_limit = USB_FASTCHARGE_CURRENT_LIMIT;
 unsigned int fastcharge_chg_limit = USB_FASTCHARGE_CHARGE_LIMIT;
 
