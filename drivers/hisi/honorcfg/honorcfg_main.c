@@ -26,19 +26,20 @@
 #include "honorcfg_main.h"
 
 /* Flag to disable/enable darkness mod (disable backlight at lowest brightness setting) */
-unsigned int darkness_mod_enable = 1;
+static int darkness_mod_enable = 1;
 /* start brightness for darkness mod aka minimum system brightness */
-unsigned int darkness_mod_base = 0;
+static int darkness_mod_base = 0;
 #define DARKNESS_MOD_BASE_MAX 10
-int darkness_mod_brightness = 0;
+static int darkness_mod_brightness = 0;
 
 /* Flag to disable/enable overclocking and force 2362000 as scaling_max_freq for big cluster cpus */
-unsigned int overclock_enable = 0;
+static int overclock_enable = 0;
 
 /* Flags for usb fastcharge */
-unsigned int fastcharge_enable = 0;
-unsigned int fastcharge_usb_limit = USB_FASTCHARGE_CURRENT_LIMIT;
-unsigned int fastcharge_chg_limit = USB_FASTCHARGE_CHARGE_LIMIT;
+static int fastcharge_enable = 0;
+static int fastcharge_usb_limit = USB_FASTCHARGE_CURRENT_LIMIT;
+static int fastcharge_chg_limit = USB_FASTCHARGE_CHARGE_LIMIT;
+static int fastcharge_general_chg_limit = GENERAL_CHARGE_LIMIT;
 
 int isDarknessModEnabled(void) {
 	return darkness_mod_enable;
@@ -65,6 +66,11 @@ int isFastchargeEnabled(void) {
 }
 EXPORT_SYMBOL_GPL(isFastchargeEnabled);
 
+int getChgcCurrentLimit(void) {
+	return fastcharge_general_chg_limit;
+}
+EXPORT_SYMBOL_GPL(getChgcCurrentLimit);
+
 static ssize_t darkness_mod_enable_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
@@ -74,15 +80,15 @@ static ssize_t darkness_mod_enable_show(struct kobject *kobj,
 static ssize_t darkness_mod_enable_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input > 1)
 		return -EINVAL;
 	if (darkness_mod_enable != input) {
 		darkness_mod_enable = input;
 	}
-	return ret;
+	return n;
 }
 
 static ssize_t darkness_mod_brightness_show(struct kobject *kobj,
@@ -100,15 +106,15 @@ static ssize_t darkness_mod_base_show(struct kobject *kobj,
 static ssize_t darkness_mod_base_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input > DARKNESS_MOD_BASE_MAX)
 		return -EINVAL;
 	if (darkness_mod_base != input) {
 		darkness_mod_base = input;
 	}
-	return ret;
+	return n;
 }
 
 static ssize_t overclock_enable_show(struct kobject *kobj,
@@ -120,15 +126,15 @@ static ssize_t overclock_enable_show(struct kobject *kobj,
 static ssize_t overclock_enable_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input > 1)
 		return -EINVAL;
 	if (overclock_enable != input) {
 		overclock_enable = input;
 	}
-	return ret;
+	return n;
 }
 
 static ssize_t fastcharge_enable_show(struct kobject *kobj,
@@ -140,16 +146,16 @@ static ssize_t fastcharge_enable_show(struct kobject *kobj,
 static ssize_t fastcharge_enable_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input > 1)
 		return -EINVAL;
 	if (fastcharge_enable != input) {
 		fastcharge_enable = input;
 	}
 	setFastcharge(fastcharge_enable, fastcharge_usb_limit, fastcharge_chg_limit);
-	return ret;
+	return n;
 }
 
 static ssize_t fastcharge_usb_limit_show(struct kobject *kobj,
@@ -161,16 +167,16 @@ static ssize_t fastcharge_usb_limit_show(struct kobject *kobj,
 static ssize_t fastcharge_usb_limit_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input < USB_NORMALCHARGE_CURRENT_LIMIT || input > USB_FASTCHARGE_CURRENT_LIMIT)
 		return -EINVAL;
 	if (fastcharge_usb_limit != input) {
 		fastcharge_usb_limit = input;
 	}
 	setFastcharge(fastcharge_enable, fastcharge_usb_limit, fastcharge_chg_limit);
-	return ret;
+	return n;
 }
 
 static ssize_t fastcharge_chg_limit_show(struct kobject *kobj,
@@ -182,16 +188,39 @@ static ssize_t fastcharge_chg_limit_show(struct kobject *kobj,
 static ssize_t fastcharge_chg_limit_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t n)
 {
-	unsigned int input;
+	int input;
 	int ret;
-	ret = sscanf(buf, "%u", &input);
+	ret = sscanf(buf, "%du", &input);
 	if (ret != 1 || input < USB_NORMALCHARGE_CHARGE_LIMIT || input > USB_FASTCHARGE_CHARGE_LIMIT)
 		return -EINVAL;
 	if (fastcharge_chg_limit != input) {
 		fastcharge_chg_limit = input;
 	}
-	setFastcharge(fastcharge_enable, fastcharge_usb_limit, fastcharge_chg_limit);
-	return ret;
+	return n;
+}
+
+static ssize_t fastcharge_general_chg_limit_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, (unsigned long)16,"%u\n", fastcharge_general_chg_limit);
+}
+
+static ssize_t fastcharge_general_chg_limit_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t n)
+{
+	int input;
+	int ret;
+	ret = sscanf(buf, "%du", &input);
+
+pr_err("fastcharge_general_chg_limit_store: buf=%s, ret=%u, input=%u, oldval=%u\n", buf,ret,input,fastcharge_general_chg_limit);
+
+	if (ret != 1 || input < 100 || input > GENERAL_CHARGE_LIMIT)
+		return -EINVAL;
+	if (fastcharge_general_chg_limit != input) {
+		fastcharge_general_chg_limit = input;
+pr_err("fastcharge_general_chg_limit_store: buf=%s, ret=%u, input=%u, newval=%u\n", buf,ret,input,fastcharge_general_chg_limit);
+	}
+	return n;
 }
 
 static struct kobj_attribute darkness_mod_enable_attr = {
@@ -256,6 +285,15 @@ static struct kobj_attribute fastcharge_chg_limit_attr = {
 	.store  = fastcharge_chg_limit_store,
 };
 
+static struct kobj_attribute fastcharge_general_chg_limit_attr = {
+	.attr   = {
+		.name = "fastcharge_general_chg_limit",
+		.mode = 0664,
+	},
+	.show   = fastcharge_general_chg_limit_show,
+	.store  = fastcharge_general_chg_limit_store,
+};
+
 static struct attribute *attrs[] = {
 	&darkness_mod_enable_attr.attr,
 	&darkness_mod_brightness_attr.attr,
@@ -264,6 +302,7 @@ static struct attribute *attrs[] = {
 	&fastcharge_enable_attr.attr,
 	&fastcharge_usb_limit_attr.attr,
 	&fastcharge_chg_limit_attr.attr,
+	&fastcharge_general_chg_limit_attr.attr,
 	NULL
 };
 
