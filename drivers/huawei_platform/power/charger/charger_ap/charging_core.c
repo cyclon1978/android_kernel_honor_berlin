@@ -39,19 +39,19 @@ static int vdpm_first_run = FIRST_RUN_TRUE;
 static int sbatt_running_first = 1;
 
 #ifdef CONFIG_USB_FASTCHARGE
-void setFastcharge(bool active, int usb_limit, int chg_limit) {
+void setFastcharge(bool active, int usb_limit, int usb_chg_limit) {
 	if (active) {
 		// USB3 maximum is 900mA
 		g_core_info->data.iin_usb = usb_limit; // USB_FASTCHARGE_CURRENT_LIMIT;
 
 		// use only up to 686mA for charging
-		g_core_info->data.ichg_usb = chg_limit; // USB_FASTCHARGE_CHARGE_LIMIT;
+		g_core_info->data.ichg_usb = usb_chg_limit; // USB_FASTCHARGE_CHARGE_LIMIT;
 	} else {
 		g_core_info->data.iin_usb = USB_NORMALCHARGE_CURRENT_LIMIT;
 		g_core_info->data.ichg_usb = USB_NORMALCHARGE_CHARGE_LIMIT;
 	}
-	hwlog_debug("iin_usb = %d\n", g_core_info->data.iin_usb);
-	hwlog_debug("ichg_usb = %d\n", g_core_info->data.ichg_usb);
+	hwlog_info("iin_usb = %d\n", g_core_info->data.iin_usb);
+	hwlog_info("ichg_usb = %d\n", g_core_info->data.ichg_usb);
 }
 #endif
 
@@ -663,6 +663,12 @@ struct charge_core_data *charge_core_get_params(void)
 	charge_core_sbatt_handler(vbatt,di->segment_para,&di->data);
 	charge_core_protect_inductance_handler(cbatt,di->inductance_para,&di->data);
 	charge_core_basp_policy_handler(&di->data);
+
+	if (di->data.ichg > getChgcCurrentLimit()) {
+		di->data.ichg = getChgcCurrentLimit();
+		hwlog_info("%s: data->iin = %d, data->ichg = %d, data->vterm = %d, ChgcCurrentLimit = %d\n",
+			__func__, di->data.iin, di->data.ichg, di->data.vterm, getChgcCurrentLimit());
+	}
 
 	return &di->data;
 }

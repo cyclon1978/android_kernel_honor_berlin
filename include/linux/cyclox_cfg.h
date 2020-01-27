@@ -29,12 +29,15 @@ int isOverclockEnabled(void);
 
 #define USB_NORMALCHARGE_CURRENT_LIMIT 500
 #define USB_NORMALCHARGE_CHARGE_LIMIT  500
+#define GENERAL_CHARGE_LIMIT 2000
 
-void setFastcharge(bool active, int usb_limit, int chg_limit);
+void setFastcharge(bool active, int usb_limit, int usb_chg_limit);
 
 int isFastchargeEnabled(void);
 
 #endif
+
+int getChgcCurrentLimit(void);
 
 #endif /* End #define __CYCLOXCFG_MAIN_H_ */
 
