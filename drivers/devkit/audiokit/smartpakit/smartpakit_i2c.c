@@ -1996,7 +1996,7 @@ static void __exit smartpakit_i2c_exit(void)
 }
 /*lint +e438 +e838*/
 
-module_init(smartpakit_i2c_init);
+late_initcall(smartpakit_i2c_init);
 module_exit(smartpakit_i2c_exit);
 
 /*lint -e753*/

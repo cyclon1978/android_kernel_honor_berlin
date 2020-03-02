@@ -15,6 +15,7 @@
 #include <linux/workqueue.h>    /*for struct evice_info*/
 #include <huawei_platform/usb/switch/switch_ap/switch_chip.h>
 extern int fsa9685_manual_sw(int input_select);
+#define RECHARGE_BATT_VOLT_DECREASE  100
 
 #define HI6523_MODULE_NAME              hi6523
 #define HI6523_MODULE_NAME_STR          "hi6523"
@@ -71,6 +72,7 @@ extern int fsa9685_manual_sw(int input_select);
 #define HI6523_FAIL -1
 #define HI6523_RESTART_TIME 4
 #define FCP_RETRY_TIME 5
+#define FCP_RESET_RETRY_TIME 3
 #define BOOST_5V_CLOSE_FAIL -1
 #define SUCC 0
 #define FAIL -1

@@ -1022,6 +1022,7 @@ static void nve_out_log(struct hisi_nve_info_user *user_info, int isRead)
 		memset(temp_nv_info, 0, sizeof(temp_nv_info));
 	}
 	printk(KERN_DEBUG "%s\n", log_nv_info);
+#ifdef CONFIG_HISI_FACTORY_VERSION
 	if (isRead) {
 		printk(KERN_DEBUG "[NVE][%s]:read data = %s\n", __func__,
 		       user_info->nv_data);
@@ -1029,6 +1030,13 @@ static void nve_out_log(struct hisi_nve_info_user *user_info, int isRead)
 		printk(KERN_DEBUG "[NVE][%s]:write data = %s\n", __func__,
 		       user_info->nv_data);
 	}
+#else
+	if (isRead) {
+		printk(KERN_DEBUG "[NVE][%s]:read data.\n", __func__);
+	} else {
+		printk(KERN_DEBUG "[NVE][%s]:write data.\n", __func__);
+	}
+#endif
 }
 #ifdef CONFIG_CRC_SUPPORT
 int nve_check_crc_and_recover(int nv_item_start, int check_items, struct NVE_struct *nvep)

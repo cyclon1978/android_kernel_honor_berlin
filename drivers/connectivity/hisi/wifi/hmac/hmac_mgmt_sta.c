@@ -3234,6 +3234,44 @@ wlan_channel_bandwidth_enum_uint8 hmac_sta_get_band(wlan_bw_cap_enum_uint8 en_de
     return en_band;
 }
 
+/*****************************************************************************
+ 函 数 名  : hmac_sta_update_join_bss_info
+ 功能描述  : 检查扫描结果中信道和带宽是否匹配，发现信道和带宽不匹配，则修改带宽为20MHz
+             5G 信道[36, 40, 44, 48, 52, 56, 60, 64]
+                    [100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144]
+                    [149, 153, 157, 161]
+                    [165]
+ 输入参数  :
+ 输出参数  :
+ 返 回 值  :
+ 调用函数  :
+ 被调函数  :
+
+ 修改历史      :
+  1.日    期   : 2018年6月30日
+    作    者   : duankaiyong 00194999
+    修改内容   : 新生成函数
+
+*****************************************************************************/
+OAL_STATIC oal_void hmac_sta_update_join_bss_info(mac_bss_dscr_stru *pst_bss_dscr)
+{
+    /* 165 信道只允许20MHz 带宽 */
+    if ((pst_bss_dscr->st_channel.uc_chan_number == 165) && (pst_bss_dscr->en_channel_bandwidth != WLAN_BAND_WIDTH_20M))
+    {
+        OAM_WARNING_LOG4(0, OAM_SF_ASSOC, "{hmac_sta_update_join_bss_info::BSS [XX:XX:XX:XX:%02X:%02X] set wrong bandwidth [%d] at channel [%d]}",
+                        pst_bss_dscr->auc_bssid[4],
+                        pst_bss_dscr->auc_bssid[5],
+                        pst_bss_dscr->en_channel_bandwidth,
+                        pst_bss_dscr->st_channel.uc_chan_number);
+
+        pst_bss_dscr->st_channel.en_bandwidth = WLAN_BAND_WIDTH_20M;
+        pst_bss_dscr->en_channel_bandwidth    = WLAN_BAND_WIDTH_20M;
+        pst_bss_dscr->en_bw_cap               = WLAN_BW_CAP_20M;
+    }
+
+    return;
+}
+
 
 /*****************************************************************************
  函 数 名  : hmac_sta_update_join_req_params
@@ -3299,6 +3337,9 @@ oal_uint32 hmac_sta_update_join_req_params(hmac_vap_stru *pst_hmac_vap,hmac_join
     /* 更新mib库对应的ssid */
     oal_memcopy(pst_mib_info->st_wlan_mib_sta_config.auc_dot11DesiredSSID, pst_join_req->st_bss_dscr.ac_ssid, WLAN_SSID_MAX_LEN);
     pst_mib_info->st_wlan_mib_sta_config.auc_dot11DesiredSSID[WLAN_SSID_MAX_LEN - 1] = '\0';
+
+    /* DTS2018062904207: 检查扫描结果中信道和带宽是否匹配，发现信道和带宽不匹配，则修改带宽为20MHz */
+    hmac_sta_update_join_bss_info(&(pst_join_req->st_bss_dscr));
 
     /* 更新频带、主20MHz信道号，与AP通信 DMAC切换信道时直接调用 */
     pst_mac_vap->st_channel.en_bandwidth   = hmac_sta_get_band(pst_mac_device->en_bandwidth_cap, pst_join_req->st_bss_dscr.en_channel_bandwidth);

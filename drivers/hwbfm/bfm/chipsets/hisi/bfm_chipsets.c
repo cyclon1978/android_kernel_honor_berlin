@@ -628,7 +628,7 @@ static unsigned int bfm_copy_user_log(char *buf, unsigned int buf_len, bfm_proce
 
     if (unlikely((NULL == buf) || (NULL == pparam) || (NULL == pparam->user_space_log_buf)))
     {
-        BFMR_PRINT_INVALID_PARAMS("buf: %p, pparam: %p, user_space_log_buf: %p\n", buf, pparam, pparam->user_space_log_buf);
+        BFMR_PRINT_INVALID_PARAMS("invalid parameter!\n");
         return 0U;
     }
 

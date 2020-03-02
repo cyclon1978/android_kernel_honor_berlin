@@ -1282,6 +1282,11 @@ dmac_rx_frame_ctrl_enum_uint8 dmac_ao_process_arp_and_mcast(dmac_vap_stru *pst_d
         return DMAC_RX_FRAME_CTRL_GOON;
     }
 
+    if (IS_AP(&(pst_dmac_vap->st_vap_base_info)))
+    {
+        return DMAC_RX_FRAME_CTRL_GOON;
+    }
+
     uc_data_type = mac_get_data_type(pst_netbuf);
 
     /* 特殊帧/报文先过滤 */

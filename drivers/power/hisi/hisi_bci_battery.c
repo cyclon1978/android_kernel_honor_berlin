@@ -678,7 +678,7 @@ static int hisi_charger_event(struct notifier_block *nb, unsigned long event,
 		break;/*lint !e456*/
 	}
 
-	if ((di->usb_online || di->ac_online) && di->capacity == CAPACITY_FULL)
+	if ((di->usb_online || di->ac_online) && di->capacity == CAPACITY_FULL &&  di->charge_status != POWER_SUPPLY_STATUS_NOT_CHARGING)
 		di->charge_status = POWER_SUPPLY_STATUS_FULL;
 	/*in case charger can not get the report of charger removed, so
 	 * update the status of charger.*/
@@ -1290,6 +1290,10 @@ static void hisi_get_battery_info(struct hisi_bci_device_info *di)
 	}
 }
 
+unsigned int get_bci_soc(void)
+{
+	return g_hisi_bci_dev?g_hisi_bci_dev->capacity:CAPACITY_FULL;
+}
 static void hisi_bci_battery_work(struct work_struct *work)
 {
 	struct hisi_bci_device_info *di = container_of(work, struct hisi_bci_device_info, hisi_bci_monitor_work.work);

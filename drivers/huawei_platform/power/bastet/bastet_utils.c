@@ -806,6 +806,7 @@ int set_current_net_device_name(char *iface)
 		return -EINVAL;
 
 	memcpy(cur_netdev_name, iface, IFNAMSIZ);
+	cur_netdev_name[IFNAMSIZ - 1] = '\0';
 	return 0;
 }
 

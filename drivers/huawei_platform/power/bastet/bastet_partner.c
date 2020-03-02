@@ -73,7 +73,7 @@ static int add_sock_info(struct list_head *socks_head,
 			sock_node = list_entry(p,
 				struct bastet_partner_sock, list);
 			if (sock_node->sk == sk) {
-				BASTET_LOGI("sk=%p is already in the list", sk);
+				BASTET_LOGI("sk is already in the list");
 				return 0;
 			}
 		}
@@ -90,7 +90,7 @@ static int add_sock_info(struct list_head *socks_head,
 	sock_node->sk = sk;
 	sock_node->identified = false;
 	list_add_tail(&sock_node->list, socks_head);
-	BASTET_LOGI("add sock_node to list, sk=%p, uid=%d", sk, uid);
+	BASTET_LOGI("add sock_node to list, uid=%d", uid);
 	if (need_report) {
 		post_indicate_packet(BST_IND_SOCK_STATE_CHANGED,
 			&uid, sizeof(uid_t));
@@ -156,8 +156,7 @@ static bool del_sock_info(struct sock *sk,
 					post_indicate_packet(BST_IND_SOCK_STATE_CHANGED,
 						&uid, sizeof(uid_t));
 
-				BASTET_LOGI("kfree struct bastet_partner_sock, sk=%p, uid=%u",
-					sk, uid);
+				BASTET_LOGI("kfree struct bastet_partner_sock,uid=%u", uid);
 				kfree(sock_node);
 				break;
 			}
@@ -424,8 +423,7 @@ static void del_socks(struct list_head *socks_head)
 			sock_node = list_entry(p,
 				struct bastet_partner_sock, list);
 			list_del(&sock_node->list);
-			BASTET_LOGI("kfree struct bastet_partner_sock, sk=%p, uid=%d",
-				sock_node->sk, sock_i_uid(sock_node->sk));
+			BASTET_LOGI("kfree struct bastet_partner_sock, uid=%d", sock_i_uid(sock_node->sk));
 			kfree(sock_node);
 		}
 	}

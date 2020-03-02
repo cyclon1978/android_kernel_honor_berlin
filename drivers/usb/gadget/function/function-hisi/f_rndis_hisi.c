@@ -208,7 +208,6 @@ static int hisi_rndis_create_net(struct f_rndis_opts *opts,
 	if (!opts)
 		return -EINVAL;
 	if (get_ether_addr_str(host_ethaddr_record, addr, HOST_ADD_LEN) > 0) {
-		pr_info("use host_ethaddr_record %s\n", addr);
 		host_addr = addr;
 	}
 

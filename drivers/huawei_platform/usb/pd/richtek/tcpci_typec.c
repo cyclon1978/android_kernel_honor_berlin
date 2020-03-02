@@ -21,6 +21,9 @@
 #include <huawei_platform/usb/pd/richtek/tcpci.h>
 #include <huawei_platform/usb/pd/richtek/tcpci_typec.h>
 #include <huawei_platform/usb/pd/richtek/tcpci_timer.h>
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+#include <huawei_platform/usb/pd/richtek/pd_dpm_core.h>
+#endif
 #include <huawei_platform/usb/pd/richtek/tcpm.h>
 #ifdef CONFIG_HUAWEI_DSM
 #include <dsm/dsm_pub.h>
@@ -29,6 +32,9 @@
 #include "huawei_platform/dp_aux_switch/dp_aux_switch.h"
 #ifdef CONFIG_POGO_PIN
 #include <huawei_platform/usb/huawei_pogopin.h>
+#endif
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+extern int support_smart_holder;
 #endif
 #ifdef CONFIG_TYPEC_CAP_TRY_SOURCE
 #define CONFIG_TYPEC_CAP_TRY_STATE
@@ -204,6 +210,10 @@ enum TYPEC_CONNECTION_STATE {
 	typec_attached_custom_src,
 #endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	typec_attached_custom_src2,
+#endif  /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
+
 #ifdef CONFIG_TYPEC_CAP_ROLE_SWAP
 	typec_role_swap,
 #endif	/* CONFIG_TYPEC_CAP_ROLE_SWAP */
@@ -247,6 +257,10 @@ static const char *const typec_state_name[] = {
 	"Custom.SRC",
 #endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	"Custom.SRC2",
+#endif  /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
+
 #ifdef CONFIG_TYPEC_CAP_ROLE_SWAP
 	"RoleSwap",
 #endif	/* CONFIG_TYPEC_CAP_ROLE_SWAP */
@@ -282,6 +296,10 @@ static const char *const typec_attach_name[] = {
 #ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC
 	"CUSTOM_SRC",
 #endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
+
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	"CUSTOM_SRC2",
+#endif  /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
 };
 
 static int typec_alert_attach_state_change(struct tcpc_device *tcpc_dev)
@@ -547,6 +565,63 @@ static inline void typec_sink_attached_entry(struct tcpc_device *tcpc_dev)
 	tcpci_sink_vbus(tcpc_dev, TCP_VBUS_CTRL_TYPEC, TCPC_VBUS_SINK_5V, -1);
 }
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static inline void cust2_src_send_cable_reset(struct tcpc_device *tcpc_dev)
+{
+	tcpci_transmit(tcpc_dev, TCPC_TX_CABLE_RESET, 0, NULL);
+	mdelay(10);
+}
+#define PD_DATA_OBJ_SIZE 7
+static inline void cust2_src_send_sopp_msg(struct tcpc_device *tcpc_dev)
+{
+	int ret;
+	uint16_t msg_hdr;
+	uint32_t payload[PD_DATA_OBJ_SIZE];
+
+	msg_hdr = PD_HEADER_SOP_PRIME(PD_DATA_VENDOR_DEF, 0, 0, 1);
+
+	payload[0] = VDO_S(USB_SID_PD, CMDT_INIT, CMD_DISCOVER_IDENT, 0);
+
+	ret = tcpci_transmit(tcpc_dev, TCPC_TX_SOP_PRIME, msg_hdr, payload);
+	if (ret < 0)
+		PD_ERR("[SendMsg] Failed, %d\r\n", ret);
+	mdelay(1);
+}
+
+static inline int cust2_src_polling_rx(struct tcpc_device *tcpc_dev)
+{
+	uint32_t alert = 0;
+	uint8_t i = 0;
+
+	while(i++ < 3) {
+		TYPEC_DBG("in loop %d\r\n", i);
+		mdelay(2);
+		tcpci_get_alert_status(tcpc_dev, &alert);
+		if(alert & TCPC_REG_ALERT_RX_STATUS) {
+			pd_msg_t *pd_msg;
+			enum tcpm_transmit_type type;
+			pd_event_t pd_event;
+
+			TYPEC_DBG("in loop RX\r\n");
+
+			pd_msg = pd_alloc_msg(tcpc_dev);
+			if (pd_msg) {
+				tcpci_get_message(tcpc_dev,
+					pd_msg->payload, &pd_msg->msg_hdr, &type);
+
+				pd_event.pd_msg = pd_msg;
+				pd_dpm_dfp_inform_cable_vdo(&tcpc_dev->pd_port, &pd_event);
+
+				pd_free_msg(tcpc_dev, pd_msg);
+				return 1;
+			}
+		}
+	}
+	TYPEC_DBG("out loop\r\n");
+	return 0;
+}
+#endif  /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
+
 static inline void typec_custom_src_attached_entry(
 	struct tcpc_device *tcpc_dev)
 {
@@ -562,8 +637,42 @@ static inline void typec_custom_src_attached_entry(
 		pd_dpm_handle_pe_event(PD_DPM_PE_EVT_TYPEC_STATE, &typec_state);
 		return;
 	}
-#endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	if (support_smart_holder) {
+		if ((cc1 == TYPEC_CC_VOLT_SNK_1_5 && cc2 == TYPEC_CC_VOLT_SNK_1_5)
+			|| (cc1 == TYPEC_CC_VOLT_SNK_3_0 && cc2 == TYPEC_CC_VOLT_SNK_3_0)) {
+			int ret;
 
+			TYPEC_DBG("Rp 1.5A or 3A\r\n");
+
+			/* 1. treat cc1 as cc */
+			tcpci_set_polarity(tcpc_dev, 1);
+			/* 2. configure tx/rx cap for sop' message */
+			tcpci_set_rx_enable(tcpc_dev, PD_RX_CAP_PE_READY_UFP | TCPC_RX_CAP_SOP_PRIME | TCPC_RX_CAP_CUST_SRC2);
+			/* 3. send cable reset to reset msg_id */
+			cust2_src_send_cable_reset(tcpc_dev);
+			/* 4. Send SOP' DiscoverIdentity message to emark */
+			cust2_src_send_sopp_msg(tcpc_dev);
+			/* 5. polling to wait sop' message */
+			ret = cust2_src_polling_rx(tcpc_dev);
+			/* 6. force clear trx alert status */
+			tcpci_alert_status_clear(tcpc_dev, TCPC_REG_ALERT_RX_MASK | TCPC_REG_ALERT_TX_MASK);
+			/* 7. configure tx/rx cap to disable */
+			tcpci_set_rx_enable(tcpc_dev, PD_RX_CAP_PE_DISABLE);
+			if (ret) {
+				TYPEC_NEW_STATE(typec_attached_custom_src2);
+				tcpc_dev->typec_attach_new = TYPEC_ATTACHED_CUSTOM_SRC2;
+				typec_state.new_state = TYPEC_ATTACHED_CUSTOM_SRC2;
+				pd_dpm_handle_pe_event(PD_DPM_PE_EVT_TYPEC_STATE, &typec_state);
+			} else {
+				TYPEC_NEW_STATE(typec_attached_custom_src2);
+				tcpc_dev->typec_attach_new = TYPEC_ATTACHED_CUSTOM_SRC2;
+			}
+			return;
+		}
+	}
+#endif  /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
+#endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
 #ifdef CONFIG_TYPEC_CAP_DBGACC_SNK
 	TYPEC_DBG("[Warning] Same Rp (%d)\r\n", typec_get_cc1());
 #else

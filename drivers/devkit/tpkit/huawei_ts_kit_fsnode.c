@@ -377,6 +377,13 @@ static ssize_t ts_glove_mode_show(struct device* dev, struct device_attribute* a
 
     TS_LOG_INFO("ts_glove_mode_show called\n");
 
+    if(1 == g_ts_kit_platform_data.glove_mode_rw_disable)
+    {
+        TS_LOG_INFO("do not read glove mode node\n");
+        error = -EPERM;
+        goto out;
+    }
+
     if (dev == NULL)
     {
         TS_LOG_ERR("dev is null\n");
@@ -431,6 +438,13 @@ static ssize_t ts_glove_mode_store(struct device* dev, struct device_attribute* 
     struct ts_glove_info* info = NULL;
 
     TS_LOG_INFO("ts_glove_mode_store called\n");
+
+    if(1 == g_ts_kit_platform_data.glove_mode_rw_disable)
+    {
+        TS_LOG_INFO("do not write glove mode node\n");
+        error = -EPERM;
+        goto out;
+    }
 
     if (dev == NULL)
     {
@@ -1388,6 +1402,10 @@ static ssize_t ts_rawdata_debug_test_show(struct device* dev, struct device_attr
     count = count + strlen(RAWDATA_DEBUG_HEAD_TEXT);
 
     row_size = info->buff[0];
+	if ((row_size <= 0) || (info->used_size) <= 0){
+		TS_LOG_ERR("%s data error! DO NOT surport this mode!", __func__);
+		goto out;
+	}
     range_size = info->buff[1];
     sprintf(buffer2, "rx: %d, tx : %d\n ", row_size, range_size);
     strncat(buf, buffer2 , strlen(buffer2));

@@ -858,7 +858,7 @@ void dsm_ufs_init(struct ufs_hba *hba)
 	}
 
 	INIT_WORK(&hba->dsm_work, dsm_ufs_handle_work);
-	spin_lock_init(&g_ufs_dsm_log.lock);
+	mutex_init(&g_ufs_dsm_log.lock);
 	dsm_ufs_enable = 1;
 	async_schedule(dsm_ufs_fastboot_async, hba);
 }

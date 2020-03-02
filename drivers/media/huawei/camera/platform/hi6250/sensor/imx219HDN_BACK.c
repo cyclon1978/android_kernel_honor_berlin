@@ -198,6 +198,7 @@ static struct sensor_power_setting imx219hdn_back_power_down_setting[] = {
 };
 
 struct mutex imx219hdn_back_power_lock;
+atomic_t volatile imx219hdn_back_powered = ATOMIC_INIT(0);
 static sensor_t s_imx219hdn_back =
 {
     .intf = { .vtbl = &s_imx219hdn_back_vtbl, },
@@ -209,6 +210,7 @@ static sensor_t s_imx219hdn_back =
             .size = ARRAY_SIZE(imx219hdn_back_power_down_setting),
             .power_setting = imx219hdn_back_power_down_setting,
     },
+    .p_atpowercnt = &imx219hdn_back_powered,
 };
 
 static const struct of_device_id s_imx219hdn_back_dt_match[] =
@@ -371,8 +373,7 @@ int imx219hdn_back_config(hwsensor_intf_t* si, void  *argp)
     cam_debug("imx219hdn_back cfgtype = %d",data->cfgtype);
     switch(data->cfgtype){
         case SEN_CONFIG_POWER_ON:
-            if (mutex_lock_interruptible(&imx219hdn_back_power_lock))
-                return -ERESTARTSYS;
+            mutex_lock(&imx219hdn_back_power_lock);
             if(false == power_on_status){
                 ret = si->vtbl->power_up(si);
                 if (ret == 0) {
@@ -384,13 +385,13 @@ int imx219hdn_back_config(hwsensor_intf_t* si, void  *argp)
             /*lint -e455 +esym(455,*)*/
             break;
         case SEN_CONFIG_POWER_OFF:
-            if (mutex_lock_interruptible(&imx219hdn_back_power_lock))
-                return -ERESTARTSYS;
+            mutex_lock(&imx219hdn_back_power_lock);
             if(true == power_on_status){
                 ret = si->vtbl->power_down(si);
-                if (ret == 0) {
-                    power_on_status = false;
+                if (ret != 0) {
+                    cam_err("%s. power_down fail.", __func__);
                 }
+                power_on_status = false;
             }
             /*lint -e455 -esym(455,*)*/
             mutex_unlock(&imx219hdn_back_power_lock);

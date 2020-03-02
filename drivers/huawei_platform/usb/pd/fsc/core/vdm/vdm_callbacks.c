@@ -34,13 +34,16 @@
 #include "vdm_types.h"
 #include "../vendor_info.h"
 #include "../platform.h"
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#include "bitfield_translators.h"
+#endif
 #ifdef FSC_HAVE_DP
 #include "DisplayPort/dp.h"
 #include "DisplayPort/interface_dp.h"
 #endif // FSC_HAVE_DP
-
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern  FSC_BOOL huawei_emarker_detected_;
+#endif
 FSC_BOOL svid_enable;
 FSC_BOOL mode_enable;
 FSC_U16 my_svid;
@@ -191,7 +194,23 @@ void vdmExitModeResult(FSC_BOOL success, FSC_U16 svid, FSC_U32 mode_index) {
 void vdmInformIdentity(FSC_BOOL success, SopType sop, Identity id) {
 
 }
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#define PID 0x3B20
+#define PID_MASK 0x0ffff
+#define PID_OFFSET 16
+#define ROW_DATA_LENGTH 3
+void vdmInformRawData(FSC_BOOL success, SopType sop, Identity id, FSC_U32 *raw_data) {
+	/* Huawei - Illegal 22k/22k */
+        if (success && (id.id_header.usb_vid == USB_VID_SOP) && (sop == SOP_TYPE_SOP1))
+        {
+              if(PID == ((raw_data[ROW_DATA_LENGTH] >> PID_OFFSET) & PID_MASK)){
+                        huawei_emarker_detected_ = TRUE;
+                        platform_double_22k_cable();
+              }
+        }
+	FSC_PRINT("FUSB %s-0x%x\n", __func__, raw_data[3]);
+}
+#endif
 void vdmInformSvids(FSC_BOOL success, SopType sop, SvidInfo svid_info) {
     if (success) {
         FSC_U32 i;

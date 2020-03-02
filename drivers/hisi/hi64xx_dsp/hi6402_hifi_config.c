@@ -371,7 +371,7 @@ static void hi6402_soundtrigger_fasttrans_ctrl_4smartpa(bool enable, bool fm)
 		hi64xx_hifi_write_reg(HI6402_SLIM_UP_EN, 0xFF);/*SLIMBUS INPUT ENABLE*/
 	} else {
 		hi64xx_hifi_write_reg(HI6402_SLIM_CTRL_5, 0x00);/*S3_OL_PGA 16K*/
-		hi64xx_hifi_write_reg(HI6402_DSP_S3_CTRL_L, 0x00);
+		hi64xx_hifi_write_reg(HI6402_DSP_S3_CTRL_L, 0x04);
 		hi64xx_hifi_write_reg(HI6402_SLIM_UP_EN, 0xAA);
 	}
 

@@ -31,6 +31,7 @@ struct fusb30x_chip                                 // Contains data required by
     FSC_U8 vconn_swap_to_on_supported;
     FSC_U8 vconn_swap_to_off_supported;
     FSC_U8 dp_enabled;
+    FSC_U8 pr_swap_wa;
     FSC_U8 product_type_ama;
     FSC_U8 modal_operation_supported;
 
@@ -75,6 +76,7 @@ struct fusb30x_chip                                 // Contains data required by
     struct hrtimer timer_policystatetimer;
     struct hrtimer timer_noresponsetimer;
     struct hrtimer timer_loopresettimer;
+    struct hrtimer timer_prswaptimer;
 
     struct hrtimer timer_wake_unlock;
     struct hrtimer timer_force_timeout;

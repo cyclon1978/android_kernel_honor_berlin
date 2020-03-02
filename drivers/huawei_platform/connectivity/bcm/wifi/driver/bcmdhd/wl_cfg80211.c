@@ -14818,7 +14818,7 @@ static void wl_hw_tem_ctrl_normal_event(struct hw_tem_ctrl_event *tem_ctl) {
     tem_ctrl_pre_duty = tem_ctl->duty;
 }
 
-static void wl_hw_tem_ctrl_abnormal_event(struct hw_tem_ctrl_event *tem_ctl) {
+static void wl_hw_tem_ctrl_abnormal_event(struct hw_tem_ctrl_event *tem_ctl, struct bcm_cfg80211 *cfg) {
     char dsm_buff[DSM_BUFF_SIZE_MAX] = {0};
     struct hw_tem_ctrl_electric_value tem_ctrl_elec_error_record = {0,0,0,0};
 
@@ -14833,7 +14833,10 @@ static void wl_hw_tem_ctrl_abnormal_event(struct hw_tem_ctrl_event *tem_ctl) {
         tem_ctrl_elec_error_record.elec3, tem_ctrl_elec_error_record.elec4);
     WL_ERR(("Error temp_ctrl_event, dmd buff:%s\n", dsm_buff));
 #ifdef HW_WIFI_DMD_LOG
-    hw_wifi_dsm_client_notify(DSM_WIFI_WLC_SET_PASSIVE_SCAN_ERROR, dsm_buff);
+    dhd_pub_t *dhd =  (dhd_pub_t *)(cfg->pub);
+    if (dhd->op_mode & DHD_FLAG_STA_MODE){
+        hw_wifi_dsm_client_notify(DSM_WIFI_WLC_SET_PASSIVE_SCAN_ERROR, dsm_buff);
+    }
 #endif
 }
 
@@ -14880,7 +14883,7 @@ wl_hw_tem_ctrl_event_handler(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev
                 wl_hw_tem_ctrl_normal_event(tem_ctl);
             } else {
                 /* abnormal temperature control process */
-                wl_hw_tem_ctrl_abnormal_event(tem_ctl);
+                wl_hw_tem_ctrl_abnormal_event(tem_ctl, cfg);
             }
         }
     } else if ((event == WLC_E_TEM_CTRL_EVENT) && (status == WLC_E_RESULT_VOLS)) {

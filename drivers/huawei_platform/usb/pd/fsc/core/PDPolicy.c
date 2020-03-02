@@ -67,6 +67,12 @@ extern FSC_U8                    nRetries;                                      
 extern FSC_BOOL                 g_Idle;                                         // Puts state machine into Idle state
 extern USBTypeCCurrent          SourceCurrent;                                  // TypeC advertised current
 extern FSC_U8                   DetachThreshold;
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern FSC_BOOL                 ExpectingVdmResponse;
+extern int                      support_smart_holder;
+#endif
+
+extern void delay_schedule_isPRSwap(void);
 
 // Device Policy Manager Variables
 FSC_BOOL                        USBPDTxFlag;                                    // Flag to indicate that we need to send a message (set by device policy manager)
@@ -835,6 +841,8 @@ void PolicySourceStartup(void)
         case 0:
             // Set masks for PD
             Registers.Mask.M_COLLISION = 0;
+            if(platform_get_pr_swap_wa_enabled())
+                Registers.Mask.M_CRC_CHK = 0;
             Registers.Mask.M_VBUSOK = 0;
             Registers.Mask.M_BC_LVL = 1;
             DeviceWrite(regMask, 1, &Registers.Mask.byte);
@@ -893,7 +901,10 @@ void PolicySourceStartup(void)
 
 	#ifdef FSC_HAVE_VDM
                 mode_entered = FALSE;
-
+	#ifdef FSC_HAVE_CUSTOM_SRC2
+                if (support_smart_holder)
+                    ExpectingVdmResponse = FALSE;
+	#endif
                 auto_mode_disc_tracker = 0;
 
                 core_svid_info.num_svids = 0;
@@ -1637,6 +1648,7 @@ void PolicySourceEvaluateDRSwap(void)
             PolicyIsDFP = (PolicyIsDFP == TRUE) ? FALSE : TRUE;                 // We're not really doing anything except flipping the bit
             Registers.Switches.DATAROLE = PolicyIsDFP;                          // Update the data role
             DeviceWrite(regSwitches1, 1, &Registers.Switches.byte[1]);          // Commit the data role in the 302 for the auto CRC
+            platform_notify_data_role(PolicyIsDFP);
         }
         else if (Status == STAT_ERROR)                                          // If we didn't receive the good CRC...
         {
@@ -1944,9 +1956,12 @@ void PolicySourceEvaluatePRSwap(void)
                                 platform_delay_10us(3000);
                             }
                             PolicySubIndex++;                                 // Increment the sub index
-                            IsPRSwap = FALSE;
+			    if(platform_get_pr_swap_wa_enabled())
+                                delay_schedule_isPRSwap();
+                            else
+				IsPRSwap = FALSE;
                             platform_set_timer(&PolicyStateTimer, tGoodCRCDelay);                   // Make sure GoodCRC has time to send
-							Registers.Status.I_COMP_CHNG = 1;   /* Force check for VBUS */
+			    Registers.Status.I_COMP_CHNG = 1;   /* Force check for VBUS */
                             break;
                         default:                                                // For all other commands received, simply ignore them
                             break;
@@ -2237,6 +2252,8 @@ void PolicySinkStartup(void)
     Registers.Status.I_COMP_CHNG = 1;   /* Force check for VBUS */
 
     Registers.Mask.M_COLLISION = 0;
+    if(platform_get_pr_swap_wa_enabled())
+        Registers.Mask.M_CRC_CHK = 0;
     DeviceWrite(regMask, 1, &Registers.Mask.byte);
     Registers.MaskAdv.M_RETRYFAIL = 0;
     Registers.MaskAdv.M_HARDSENT = 0;
@@ -2264,7 +2281,8 @@ void PolicySinkStartup(void)
 
     USBPDContract.object = 0;                                           // Clear the USB PD contract (output power to 5V default)
     PartnerCaps.object = 0;                                         // Clear partner sink caps
-    IsPRSwap = FALSE;
+    if(!platform_get_pr_swap_wa_enabled())
+	IsPRSwap = FALSE;
     PolicyIsSource = FALSE;                                                     // Clear the flag to indicate that we are a sink (for PRSwaps)
     Registers.Switches.POWERROLE = PolicyIsSource;
     DeviceWrite(regSwitches1, 1, &Registers.Switches.byte[1]);
@@ -2283,7 +2301,10 @@ void PolicySinkStartup(void)
 
 #ifdef FSC_HAVE_VDM
     auto_mode_disc_tracker = 0;
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+    if (support_smart_holder)
+        ExpectingVdmResponse = FALSE;
+#endif
     mode_entered = FALSE;
 
     core_svid_info.num_svids = 0;
@@ -2842,6 +2863,7 @@ void PolicySinkEvaluateDRSwap(void)
             PolicyIsDFP = (PolicyIsDFP == TRUE) ? FALSE : TRUE;                 // We're not really doing anything except flipping the bit
             Registers.Switches.DATAROLE = PolicyIsDFP;                          // Update the data role
             DeviceWrite(regSwitches1, 1, &Registers.Switches.byte[1]);         // Commit the data role in the 302 for the auto CRC
+            platform_notify_data_role(PolicyIsDFP);
         }
         else if (Status == STAT_ERROR)                                          // If we didn't receive the good CRC...
         {
@@ -3093,7 +3115,11 @@ void PolicySinkEvaluatePRSwap(void)
 
 void PolicyGiveVdm(void) {
 
-    if (ProtocolMsgRx && PolicyRxHeader.MessageType == DMTVenderDefined)        // Have we received a VDM message
+    if (ProtocolMsgRx && PolicyRxHeader.MessageType == DMTVenderDefined       // Have we received a VDM message
+#ifdef FSC_HAVE_CUSTOM_SRC2
+        && !support_smart_holder
+#endif
+       )
     {
         sendVdmMessageFailed();                                                 // if we receive anything, kick out of here (interruptible)
         PolicySubIndex = 0;                                                     // Reset the sub index
@@ -3174,15 +3200,22 @@ void PolicyVdm (void) {
     }
     else
     {
-        if (sendingVdmData)
+    #ifdef FSC_HAVE_CUSTOM_SRC2
+        if (!support_smart_holder)
         {
-            result = PolicySendData(DMTVenderDefined, vdm_msg_length, vdm_msg_obj, vdm_next_ps, 0, vdm_sop);
-            if (result == STAT_SUCCESS || result == STAT_ERROR)
+    #endif
+            if (sendingVdmData)
             {
-                FSC_PRINT("FUSB %s - VDM Sent Via PolicyVDM\n",__func__);
-                sendingVdmData = FALSE;
+                result = PolicySendData(DMTVenderDefined, vdm_msg_length, vdm_msg_obj, vdm_next_ps, 0, vdm_sop);
+                if (result == STAT_SUCCESS || result == STAT_ERROR)
+                {
+                    FSC_PRINT("FUSB %s - VDM Sent Via PolicyVDM\n",__func__);
+                    sendingVdmData = FALSE;
+                }
             }
+    #ifdef FSC_HAVE_CUSTOM_SRC2
         }
+    #endif
     }
 
     if (VdmTimerStarted && (platform_check_timer(&VdmTimer)))
@@ -3403,6 +3436,14 @@ FSC_U8 PolicySendData(FSC_U8 MessageType, FSC_U8 NumDataObjects, doDataObject_t*
             Status = STAT_SUCCESS;
             break;
         case txError:                                                           // Didn't receive a GoodCRC message...
+        #ifdef FSC_HAVE_CUSTOM_SRC2
+            if (support_smart_holder)
+                if (sop == SOP_TYPE_SOP1)
+                {
+                    PDTxStatus = txIdle;
+                    return STAT_ERROR;
+                }
+        #endif
             if (PolicyState == peSourceSendCaps)                                // If we were in the send source caps state when the error occurred...
                 PolicyState = peSourceDiscovery;                                // Go to the discovery state
             else if (PolicyIsSource)                                            // Otherwise, if we are a source...
@@ -3578,6 +3619,9 @@ void InitializeVdmManager(void)
 	vdmm.enter_mode_result  = &vdmEnterModeResult;
 	vdmm.exit_mode_result   = &vdmExitModeResult;
 	vdmm.inform_id			= &vdmInformIdentity;
+#ifdef FSC_HAVE_CUSTOM_SRC2
+	vdmm.inform_raw_vdo_data = &vdmInformRawData;
+#endif
 	vdmm.inform_svids		= &vdmInformSvids;
 	vdmm.inform_modes		= &vdmInformModes;
 	vdmm.inform_attention   = &vdmInformAttention;

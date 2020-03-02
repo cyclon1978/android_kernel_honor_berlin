@@ -44,6 +44,7 @@ const char* FUSB_DT_INTERRUPT_INTN =    "fsc_interrupt_int_n";      // Name of t
 #define FUSB_DT_GPIO_INTN               "fairchild,int_n"           // Name of the Int_N GPIO pin in the Device Tree
 #define FUSB_DT_GPIO_VBUS_5V            "fairchild,vbus5v"          // Name of the VBus 5V GPIO pin in the Device Tree
 #define FUSB_DT_GPIO_VBUS_OTHER         "fairchild,vbusOther"       // Name of the VBus Other GPIO pin in the Device Tree
+#define FUSB_TIMERS_DELAY               120                         // PRWap delay
 
 #ifdef FSC_DEBUG
 #define FUSB_DT_GPIO_DEBUG_SM_TOGGLE    "fairchild,dbg_sm"          // Name of the debug State Machine toggle GPIO pin in the Device Tree
@@ -54,7 +55,7 @@ const char* FUSB_DT_INTERRUPT_INTN =    "fsc_interrupt_int_n";      // Name of t
 static irqreturn_t _fusb_isr_intn(int irq, void *dev_id);
 #endif  // FSC_INTERRUPT_TRIGGERED
 
-
+extern FSC_BOOL IsPRSwap;
 
 
 
@@ -109,7 +110,7 @@ static int fusb_get_dual_role_mode(void)
 	FSC_PRINT("%s +\n", __func__);
 	if (chip->orientation != NONE)
 	{
-		if (chip->sourceOrSink == SOURCE)
+		if (sourceOrSink == SOURCE)
 		{
 			mode = DUAL_ROLE_PROP_MODE_DFP;
 		}
@@ -1224,6 +1225,26 @@ enum hrtimer_restart _fusb_loopresettimer_timeout(struct hrtimer* timer)
         core_clear_loop_counter();
         return HRTIMER_NORESTART;
 }
+
+enum hrtimer_restart _fusb_prswaptimer_timeout(struct hrtimer* timer)
+{
+       struct fusb30x_chip* chip = fusb30x_GetChip();
+        if (!chip)
+        {
+                pr_err("FUSB %s - Error: Chip structure is NULL!\n", __func__);
+                return HRTIMER_NORESTART;
+        }
+        if (!timer)
+        {
+                pr_err("FUSB %s - Error: High resolution timer is NULL!\n", __func__);
+                return HRTIMER_NORESTART;
+        }
+        pr_info("FUSB %s - Timer Timeout\n", __func__);
+        IsPRSwap = FALSE;
+        return HRTIMER_NORESTART;
+
+}
+
 void fusb_InitializeTimer(void)
 {
     struct fusb30x_chip* chip = fusb30x_GetChip();
@@ -1264,6 +1285,12 @@ void fusb_InitializeTimer(void)
 
     hrtimer_init(&chip->timer_loopresettimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     chip->timer_loopresettimer.function = _fusb_loopresettimer_timeout;
+
+    if(platform_get_pr_swap_wa_enabled())
+    {
+        hrtimer_init(&chip->timer_prswaptimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+        chip->timer_prswaptimer.function = _fusb_prswaptimer_timeout;
+    }
 
     pr_debug("FUSB  %s - Timer initialized!\n", __func__);
 }
@@ -3666,6 +3693,7 @@ void fusb_InitChipData(void)
         chip->vconn_swap_to_on_supported = of_property_read_bool(node, "vconn_swap_to_on_supported");
         chip->vconn_swap_to_off_supported = of_property_read_bool(node, "vconn_swap_to_off_supported");
         chip->dp_enabled = of_property_read_bool(node, "dp_enabled");
+        chip->pr_swap_wa = of_property_read_bool(node, "pr_swap_wa");
         chip->product_type_ama = of_property_read_bool(node, "product_type_ama");
         chip->modal_operation_supported = of_property_read_bool(node, "modal_operation_supported");
     }
@@ -3674,14 +3702,16 @@ void fusb_InitChipData(void)
         chip->vconn_swap_to_on_supported = 0;
         chip->vconn_swap_to_off_supported = 0;
         chip->dp_enabled = 0;
+        chip->pr_swap_wa = 0;
         chip->product_type_ama = 0;
         chip->modal_operation_supported =0;
     }
     pr_err("%s Device Tree Validation Check vconn_swap_to_on_supported: %d\n", __func__,chip->vconn_swap_to_on_supported);
-    pr_err("%s Device Tree Validation Check vconn_swap_to_on_supported: %d\n", __func__,chip->vconn_swap_to_off_supported);
-    pr_err("%s Device Tree Validation Check vconn_swap_to_on_supported: %d\n", __func__,chip->dp_enabled);
-    pr_err("%s Device Tree Validation Check vconn_swap_to_on_supported: %d\n", __func__,chip->product_type_ama);
-    pr_err("%s Device Tree Validation Check vconn_swap_to_on_supported: %d\n", __func__,chip->modal_operation_supported);
+    pr_err("%s Device Tree Validation Check vconn_swap_to_off_supported: %d\n", __func__,chip->vconn_swap_to_off_supported);
+    pr_err("%s Device Tree Validation Check dp_enabled: %d\n", __func__,chip->dp_enabled);
+    pr_err("%s Device Tree Validation Check pr_swap_wa: %d\n", __func__,chip->pr_swap_wa);
+    pr_err("%s Device Tree Validation Check product_type_ama: %d\n", __func__,chip->product_type_ama);
+    pr_err("%s Device Tree Validation Check modal_operation_supported: %d\n", __func__,chip->modal_operation_supported);
 
 #ifdef FSC_DEBUG
     chip->dbgTimerTicks = 0;
@@ -3716,6 +3746,19 @@ void fusb_InitChipData(void)
 /*********************************************************************************************************************/
 /*********************************************************************************************************************/
 #ifdef FSC_INTERRUPT_TRIGGERED
+
+void delay_schedule_isPRSwap(void)
+{
+    struct fusb30x_chip* chip = fusb30x_GetChip();
+
+    if (!chip)
+    {
+        pr_err("FUSB %s - Error: Chip structure is NULL!\n", __func__);
+        return;
+    }
+
+    fusb_StartTimers(&chip->timer_prswaptimer, FUSB_TIMERS_DELAY);
+}
 
 static void fusb302_hardreset_work_handler(struct kthread_work *work)
 {

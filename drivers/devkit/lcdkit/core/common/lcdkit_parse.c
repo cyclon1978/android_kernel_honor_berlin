@@ -647,6 +647,8 @@ void lcdkit_parse_panel_dts(struct device_node* np)
     }
     /*for TP power ctrl*/
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-lcd-type", &g_tskit_ic_type, 1);
+    /*for TP gesture special sequence*/
+    OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-tddi-tp-gesture-sequence-flag", &lcdkit_info.panel_infos.tddi_tp_gesture_sequence_flag, 0);
     /*for power mode ctrl*/
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-bias-power-ctrl-mode", &lcdkit_info.panel_infos.bias_power_ctrl_mode, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-iovcc-power-ctrl-mode", &lcdkit_info.panel_infos.iovcc_power_ctrl_mode, 0);
@@ -659,6 +661,7 @@ void lcdkit_parse_panel_dts(struct device_node* np)
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-id0-gpio", &lcdkit_info.panel_infos.gpio_lcd_id0, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-id1-gpio", &lcdkit_info.panel_infos.gpio_lcd_id1, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-reset-gpio", &lcdkit_info.panel_infos.gpio_lcd_reset, 0);
+    OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-tp-reset-gpio", &lcdkit_info.panel_infos.gpio_tp_reset, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-te-gpio", &lcdkit_info.panel_infos.gpio_lcd_te, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-iovcc-gpio", &lcdkit_info.panel_infos.gpio_lcd_iovcc, 0);
     OF_PROPERTY_READ_U8_DEFAULT(np, "hw,lcdkit-vci-gpio", &lcdkit_info.panel_infos.gpio_lcd_vci, 0);

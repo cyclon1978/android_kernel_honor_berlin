@@ -14106,10 +14106,6 @@ OAL_STATIC oal_int32  wal_ioctl_get_assoc_list(oal_net_device_stru *pst_net_dev,
     {
         OAM_ERROR_LOG1(0, OAM_SF_ANY, "{wal_ioctl_get_assoc_list::process failed,ret=%d}", l_ret);
     }
-    else
-    {
-        OAL_IO_PRINT("wal_ioctl_get_assoc_list,pc_sta_list is:%s,len:%d\n", pc_extra, pst_wrqu->data.length);
-    }
 
     oal_free(pst_rsp_msg);
     return l_ret;

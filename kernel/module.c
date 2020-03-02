@@ -65,6 +65,13 @@
 #include <linux/arm-smccc.h>
 #include <linux/of.h>
 
+#ifdef CONFIG_MODULE_SIG
+#include <huawei_platform/log/imonitor.h>
+#define ITEM_INFO_LEN 1024
+#define STP_ACTIVE_THREAT_INFO 940001001
+#define STP_MODSIG_ID 0x00000102
+#endif /* !CONFIG_MODULE_SIG */
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
@@ -2626,6 +2633,30 @@ static inline void kmemleak_load_module(const struct module *mod,
 #endif
 
 #ifdef CONFIG_MODULE_SIG
+static void modsig_do_upload_log(void)
+{
+	char info[ITEM_INFO_LEN] = {0};
+	int ret = 0;
+
+	struct imonitor_eventobj *obj = imonitor_create_eventobj(STP_ACTIVE_THREAT_INFO);
+	if (!obj)
+	{
+		return;
+	}
+	(void)snprintf(info, ITEM_INFO_LEN, "name:mod-sign");
+	ret += imonitor_set_param(obj, E940001001_ID_INT, STP_MODSIG_ID);
+	ret += imonitor_set_param(obj, E940001001_VER_TINYINT, 0);
+	ret += imonitor_set_param(obj, E940001001_INFO_VARCHAR, (long)info);
+	if (ret)
+	{
+		imonitor_destroy_eventobj(obj);
+		return;
+	}
+	(void)imonitor_send_event(obj);
+	imonitor_destroy_eventobj(obj);
+	return;
+}
+
 static int module_sig_check(struct load_info *info, int flags)
 {
 	int err = -ENOKEY;
@@ -2648,6 +2679,8 @@ static int module_sig_check(struct load_info *info, int flags)
 		info->sig_ok = true;
 		return 0;
 	}
+
+	modsig_do_upload_log();
 
 	/* Not having a signature is only an error if we're strict. */
 	if (err == -ENOKEY && !sig_enforce)

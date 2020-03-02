@@ -164,46 +164,51 @@ static const struct partition partition_table_emmc[] =
     {PART_PATCH,             944*1024,  32*1024,  EMMC_USER_PART}, /* patch            32M  p47*/
     {PART_BOOTFAIL_INFO,     976*1024,  2*1024,   EMMC_USER_PART}, /* bootfail_info    2M   p48*/
     {PART_RRECORD,           978*1024,  16*1024,  EMMC_USER_PART}, /* rrecord          16M  p49*/
+#if (defined(CONFIG_MARKET_OVERSEA) || defined(CONFIG_MARKET_INTERNAL))
+    {PART_RESERVED9,         994*1024,  22*1024,  EMMC_USER_PART}, /* reserved9        22M  p50*/
+    {PART_PRELOAD,           1016*1024,  8*1024,   EMMC_USER_PART},/* preload          8M   p51*/
+#else
     {PART_RESERVED9,         994*1024,  30*1024,  EMMC_USER_PART}, /* reserved9        30M  p50*/
+#endif
 #endif
 #ifdef CONFIG_MARKET_OVERSEA
 #ifdef CONFIG_PARTITION_ROMUPGRADE_HI6250
-    {PART_SYSTEM,            1024*1024, 4688*1024,EMMC_USER_PART}, /* system           4688M p51*/
-    {PART_CUST,              5712*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p52*/
-    {PART_VERSION,           5904*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p53*/
-    {PART_VENDOR,            5936*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p54*/
-    {PART_PRODUCT,           6720*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p55*/
-    {PART_USERDATA,          6912*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p56*/
+    {PART_SYSTEM,            1024*1024, 4688*1024,EMMC_USER_PART}, /* system           4688M p52*/
+    {PART_CUST,              5712*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p53*/
+    {PART_VERSION,           5904*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p54*/
+    {PART_VENDOR,            5936*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p55*/
+    {PART_PRODUCT,           6720*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p56*/
+    {PART_USERDATA,          6912*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p57*/
 #else
-    {PART_SYSTEM,            1024*1024, 3536*1024,EMMC_USER_PART}, /* system           3536M p51*/
-    {PART_CUST,              4560*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p52*/
+    {PART_SYSTEM,            1024*1024, 3536*1024,EMMC_USER_PART}, /* system           3536M p52*/
+    {PART_CUST,              4560*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p53*/
 #ifdef CONFIG_MARKET_BACH2_VERSION_OVERSEA
-    {PART_VERSION,           4752*1024, 288*1024, EMMC_USER_PART}, /* version          288M  p53*/
-    {PART_VENDOR,            5040*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p54*/
-    {PART_PRODUCT,           5824*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p55*/
-    {PART_USERDATA,          6016*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p56*/
+    {PART_VERSION,           4752*1024, 288*1024, EMMC_USER_PART}, /* version          288M  p54*/
+    {PART_VENDOR,            5040*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p55*/
+    {PART_PRODUCT,           5824*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p56*/
+    {PART_USERDATA,          6016*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p57*/
 #else
-    {PART_VERSION,           4752*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p53*/
-    {PART_VENDOR,            4784*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p54*/
-    {PART_PRODUCT,           5568*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p55*/
-    {PART_USERDATA,          5760*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p56*/
+    {PART_VERSION,           4752*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p54*/
+    {PART_VENDOR,            4784*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p55*/
+    {PART_PRODUCT,           5568*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p56*/
+    {PART_USERDATA,          5760*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p57*/
 #endif
 #endif
 #elif defined CONFIG_MARKET_INTERNAL
 #ifdef CONFIG_PARTITION_ROMUPGRADE_HI6250
-    {PART_SYSTEM,            1024*1024, 3552*1024,EMMC_USER_PART}, /* system           3552M p51*/
-    {PART_CUST,              4576*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p52*/
-    {PART_VERSION,           4768*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p53*/
-    {PART_VENDOR,            4800*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p54*/
-    {PART_PRODUCT,           5584*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p55*/
-    {PART_USERDATA,          5776*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p56*/
+    {PART_SYSTEM,            1024*1024, 3552*1024,EMMC_USER_PART}, /* system           3552M p52*/
+    {PART_CUST,              4576*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p53*/
+    {PART_VERSION,           4768*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p54*/
+    {PART_VENDOR,            4800*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p55*/
+    {PART_PRODUCT,           5584*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p56*/
+    {PART_USERDATA,          5776*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p57*/
 #else
-    {PART_SYSTEM,            1024*1024, 3088*1024,EMMC_USER_PART}, /* system           3088M p51*/
-    {PART_CUST,              4112*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p52*/
-    {PART_VERSION,           4304*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p53*/
-    {PART_VENDOR,            4336*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p54*/
-    {PART_PRODUCT,           5120*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p55*/
-    {PART_USERDATA,          5312*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p56*/
+    {PART_SYSTEM,            1024*1024, 3088*1024,EMMC_USER_PART}, /* system           3088M p52*/
+    {PART_CUST,              4112*1024, 192*1024, EMMC_USER_PART}, /* cust             192M  p53*/
+    {PART_VERSION,           4304*1024, 32*1024,  EMMC_USER_PART}, /* version          32M   p54*/
+    {PART_VENDOR,            4336*1024, 784*1024, EMMC_USER_PART}, /* vendor           784M  p55*/
+    {PART_PRODUCT,           5120*1024, 192*1024, EMMC_USER_PART}, /* product          192M  p56*/
+    {PART_USERDATA,          5312*1024, 4096*1024,EMMC_USER_PART}, /* userdata         4096M p57*/
 #endif
 #elif defined CONFIG_MARKET_16G_OVERSEA
     {PART_SYSTEM,            1024*1024, 3008*1024,EMMC_USER_PART}, /* system           3008M p51*/

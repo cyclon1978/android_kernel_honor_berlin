@@ -100,6 +100,9 @@ void StateMachineAttachWaitSink(void);
 void StateMachineAttachedSink(void);
 void StateMachineTryWaitSink(void);
 void StateMachineDebugAccessorySink(void);
+#ifdef FSC_HAVE_CUSTOM_SRC2
+void StateMachineEmarkerCheck(void);
+#endif
 #endif // FSC_HAVE_SNK
 
 #if (defined(FSC_HAVE_DRP) || (defined(FSC_HAVE_SNK) && defined(FSC_HAVE_ACCMODE)))
@@ -140,6 +143,9 @@ void SetStateUnattached(void);
 void SetStateAttachWaitSink(void);
 void SetStateAttachedSink(void);
 void SetStateDebugAccessorySink(void);
+#ifdef FSC_HAVE_CUSTOM_SRC2
+void SetStateEmarkCheck(void);
+#endif
 #ifdef FSC_HAVE_DRP
 void RoleSwapToAttachedSink(void);
 #endif // FSC_HAVE_DRP

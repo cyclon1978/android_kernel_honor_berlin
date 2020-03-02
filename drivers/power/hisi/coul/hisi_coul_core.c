@@ -1,5 +1,5 @@
 
-
+#include <libhwsecurec/securec.h>
 #include "hisi_coul_core.h"
 #ifdef CONFIG_HUAWEI_CHARGER_SENSORHUB
 #include "inputhub_bridge.h"
@@ -29,7 +29,7 @@ static struct ss_coul_nv_info my_nv_info;
 static struct platform_device *g_pdev = NULL;
 static unsigned long nv_info_addr = 0;
 static int g_eco_leak_uah = 0;
-
+static u32 dec_state = 0;//Battery vol decrease functional switch
 static u32 is_board_type = 0;
 static u32 battery_is_removable = 0;
 static u32 adc_batt_id = DEFAULT_HKADC_BATT_ID;
@@ -4831,6 +4831,316 @@ static void coul_smooth_startup_soc(struct smartstar_coul_device *di)
     di->coul_dev_ops->clear_last_soc_flag();
     return;
 }
+#ifdef CONFIG_HUAWEI_CHARGER
+static void __fatal_isc_chg_prot(struct iscd_info *iscd, int * capacity)
+{
+    int ret;
+    if( *capacity >= iscd->fatal_isc_soc_limit[UPLIMIT]) {
+        ret = set_charger_disable_flags(CHARGER_SET_DISABLE_FLAGS, CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Set isc disable flags for charger failed in %s\n.", __func__);
+        }
+    } else if( *capacity <= iscd->fatal_isc_soc_limit[RECHARGE]) {
+        ret = set_charger_disable_flags(CHARGER_CLEAR_DISABLE_FLAGS, CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Clear isc disable flags for charger failed in %s\n.", __func__);
+        }
+    }
+}
+static int fatal_isc_chg_limit_soc(struct notifier_block *self,
+                                             unsigned long event, void *data)
+{
+    struct iscd_info *iscd = container_of(self, struct iscd_info, fatal_isc_chg_limit_soc_nb);
+    int ret;
+    if(event == ISC_LIMIT_START_CHARGING_STAGE) {
+        ret = set_charger_disable_flags(CHARGER_CLEAR_DISABLE_FLAGS, CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Clear charger ISC disable flag failed.\n");
+        }
+        __fatal_isc_chg_prot(iscd, (int *)data);
+    }else if(event == ISC_LIMIT_UNDER_MONITOR_STAGE) {
+        __fatal_isc_chg_prot(iscd, (int *)data);
+    }
+    return NOTIFY_OK;
+}
+#else
+static int fatal_isc_chg_limit_soc(struct notifier_block *self,
+                                             unsigned long event, void *data)
+{
+    return NOTIFY_OK;
+}
+#endif
+#ifdef CONFIG_DIRECT_CHARGER
+static void __fatal_isc_direct_chg_prot(struct iscd_info *iscd, int * capacity)
+{
+    int ret;
+    if( *capacity >= iscd->fatal_isc_soc_limit[UPLIMIT]) {
+        ret = set_direct_charger_disable_flags(DIRECT_CHARGER_SET_DISABLE_FLAGS,
+                                               DIRECT_CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Set isc disable flags for direct charger failed in %s\n.", __func__);
+        }
+    } else if( *capacity <= iscd->fatal_isc_soc_limit[RECHARGE]) {
+        ret = set_direct_charger_disable_flags(DIRECT_CHARGER_CLEAR_DISABLE_FLAGS,
+                                               DIRECT_CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Clear isc disable flags for direct charger failed in %s\n.", __func__);
+        }
+    }
+}
+static int fatal_isc_direct_chg_limit_soc(struct notifier_block *self,
+                                                       unsigned long event, void *data)
+{
+    struct iscd_info *iscd = container_of(self, struct iscd_info, fatal_isc_direct_chg_limit_soc_nb);
+    int ret;
+    if(event == ISC_LIMIT_START_CHARGING_STAGE) {
+        ret = set_direct_charger_disable_flags(DIRECT_CHARGER_CLEAR_DISABLE_FLAGS,
+                                               DIRECT_CHARGER_FATAL_ISC_TYPE);
+        if(unlikely(ret)) {
+            hwlog_err("Clear direct charger ISC disable flag failed.\n");
+        }
+        __fatal_isc_direct_chg_prot(iscd, (int *)data);
+    }else if(event == ISC_LIMIT_UNDER_MONITOR_STAGE) {
+        __fatal_isc_direct_chg_prot(iscd, (int *)data);
+    }
+    return NOTIFY_OK;
+}
+#else
+static int fatal_isc_direct_chg_limit_soc(struct notifier_block *self,
+                                                      unsigned long event, void *data)
+{
+    return NOTIFY_OK;
+}
+#endif
+static void __fatal_isc_uevent(struct work_struct *work)
+{
+    struct iscd_info * iscd = container_of(work, struct iscd_info, fatal_isc_uevent_work);
+    char *envp_ext[] = {"BATTERY_EVENT=FATAL_ISC", NULL};
+    if(!g_smartstar_coul_dev) {
+        hwlog_err("driver for isc probe uncorrect found in %s.\n", __func__);
+        return;
+    }
+    iscd->isc_prompt = 1;
+    kobject_uevent_env(&g_smartstar_coul_dev->dev->kobj, KOBJ_CHANGE, envp_ext);
+}
+static int fatal_isc_uevent_notify(struct notifier_block *self,
+                                             unsigned long event, void *data)
+{
+    struct iscd_info *iscd = container_of(self, struct iscd_info, fatal_isc_uevent_notify_nb);
+    if(event != ISC_LIMIT_START_CHARGING_STAGE && event != ISC_LIMIT_BOOT_STAGE) {
+        return NOTIFY_DONE;
+    } else if(iscd->isc_status){
+        schedule_work(&iscd->fatal_isc_uevent_work);
+    }
+    return NOTIFY_OK;
+}
+/*
+ *kernel should not op files in the filesystem that managered by user space
+ *transplant this function into user space is prefered
+ */
+static void isc_splash2_file_sync(struct iscd_info *iscd)
+{
+    struct file * fd;
+    ssize_t write_size;
+    if(!iscd) {
+        hwlog_err("Null input pointer iscd found in %s\n", __func__);
+        return;
+    }
+    if(iscd->isc_splash2_ready){
+        fd = filp_open(ISC_DATA_FILE, O_WRONLY|O_TRUNC, 0);
+        if(IS_ERR(fd)) {
+            hwlog_err("splash2 file system not ready for isc data record\n.");
+            return;
+        }
+        iscd->fatal_isc_hist.magic_num = FATAL_ISC_MAGIC_NUM;
+        write_size = kernel_write(fd, (const void *)&iscd->fatal_isc_hist, sizeof(isc_history), 0);
+        if(write_size != sizeof(iscd->fatal_isc_hist)) {
+            hwlog_err("Write %s failed(wtire:%zd expect:%zu) in %s\n.",
+                      ISC_DATA_FILE, write_size, sizeof(iscd->fatal_isc_hist), __func__);
+        }
+        filp_close(fd, NULL);
+        hwlog_info("sync fatal isc to splash2 success.\n");
+    } else {
+        hwlog_err("splash2 file system not ready for isc data record\n.");
+    }
+}
+static void fatal_isc_dmd_wkfunc(struct work_struct *work)
+{
+    fatal_isc_dmd *reporter = container_of(work, fatal_isc_dmd, work);
+    struct iscd_info *iscd = container_of(reporter, struct iscd_info, dmd_reporter);
+    if (!dsm_client_ocuppy(get_battery_dclient())) {
+        dsm_client_record(get_battery_dclient(), "%s", reporter->buff);
+        dsm_client_notify(get_battery_dclient(), reporter->err_no);
+        iscd->fatal_isc_hist.dmd_report = 0;
+        isc_splash2_file_sync(iscd);
+        hwlog_info("fatal isc dmd report:%d.\n", reporter->err_no);
+        kfree(reporter->buff);
+        reporter->buff = NULL;
+    } else if(reporter->retry < FATAL_ISC_DMD_RETRY){
+        reporter->retry++;
+        schedule_delayed_work(&reporter->work, msecs_to_jiffies(FATAL_ISC_DMD_RETRY_INTERVAL));
+    } else {
+        kfree(reporter->buff);
+        reporter->buff = NULL;
+    }
+}
+static int fatal_isc_dsm_report(struct notifier_block *self,
+                                        unsigned long event, void *data)
+{
+    int i;
+    int j;
+    struct iscd_info *iscd = container_of(self, struct iscd_info, fatal_isc_dsm_report_nb);
+    if(iscd->isc_status && iscd->fatal_isc_hist.dmd_report && event == ISC_LIMIT_BOOT_STAGE && iscd->app_ready == ISC_APP_READY) {
+        iscd->dmd_reporter.retry = 0;
+        if(iscd->isc_status <= iscd->fatal_isc_trigger.valid_num) {
+            iscd->dmd_reporter.err_no = iscd->fatal_isc_trigger.dmd_no[iscd->isc_status-1];
+        } else {
+            hwlog_err("DMD index(%u) was out of range(%u).\n",
+                      iscd->isc_status, iscd->fatal_isc_trigger.valid_num);
+            return NOTIFY_OK;
+        }
+        j = (iscd->fatal_isc_hist.valid_num > MAX_FATAL_ISC_NUM)?
+            MAX_FATAL_ISC_NUM:iscd->fatal_isc_hist.valid_num;
+        if(!iscd->dmd_reporter.buff) {
+            iscd->dmd_reporter.buff = (char *)kzalloc((j+1)*FATAL_ISC_DMD_LINE_SIZE+1, GFP_KERNEL);/*lint !e647*/
+            if(!iscd->dmd_reporter.buff) {
+                hwlog_err("Kzalloc for fatal isc dmd buffer failed in %s.\n", __func__);
+                return NOTIFY_OK;
+            }
+        }else{
+            hwlog_err("Fatal isc dmd buff not point to null before %s.\n", __func__);
+            return NOTIFY_OK;
+        }
+        snprintf(iscd->dmd_reporter.buff, FATAL_ISC_DMD_LINE_SIZE+1,
+                 "%7s%6s%6s%6s%6s%5s%5s\n",
+                 "ISC(uA)", "FCC", "RM", "QMAX", "CYCLE", "YEAR", "YDAY");
+        for(i = 0; i < j; i++) {
+            snprintf(iscd->dmd_reporter.buff + (i+1) * FATAL_ISC_DMD_LINE_SIZE,
+                     FATAL_ISC_DMD_LINE_SIZE+1, "%7d%6d%6d%6d%6d%5d%5d\n",
+                     iscd->fatal_isc_hist.isc[i], iscd->fatal_isc_hist.fcc[i]/1000,
+                     iscd->fatal_isc_hist.rm[i]/1000, iscd->fatal_isc_hist.qmax[i]/1000,
+                     iscd->fatal_isc_hist.charge_cycles[i]/100, iscd->fatal_isc_hist.year[i],
+                     iscd->fatal_isc_hist.yday[i]);
+        }
+        schedule_delayed_work(&iscd->dmd_reporter.work, msecs_to_jiffies(0));
+    }
+    return NOTIFY_OK;
+}
+static int fatal_isc_ocv_update(struct notifier_block *self,
+                                        unsigned long event, void *data)
+{
+    struct iscd_info *iscd = container_of(self, struct iscd_info, fatal_isc_ocv_update_nb);
+    int avg_current;
+    static unsigned int ocv_update_cnt = 0;
+    if(!g_smartstar_coul_dev) {
+        hwlog_err("global coul device pointer is null found in %s.\n", __func__);
+        return NOTIFY_OK;
+    }
+    if(event == ISC_LIMIT_START_CHARGING_STAGE) {
+        ocv_update_cnt = 0;
+    }else if( event == ISC_LIMIT_UNDER_MONITOR_STAGE ) {
+        if(g_smartstar_coul_dev->charging_state == CHARGING_STATE_CHARGE_NOT_CHARGE) {
+            ocv_update_cnt++;
+            ocv_update_cnt = (ocv_update_cnt > iscd->ocv_update_interval) ?
+                              iscd->ocv_update_interval : ocv_update_cnt;
+        }else{
+            ocv_update_cnt = 0;
+        }
+        if(ocv_update_cnt == iscd->ocv_update_interval) {
+            avg_current = coul_get_battery_current_avg_ma();
+            avg_current = avg_current < 0 ? -avg_current : avg_current;
+            if(avg_current > FATAL_ISC_OCV_UPDATE_THRESHOLD) {
+                hwlog_info("Current is too big(%d mA) to update ocv found in %s.",
+                           avg_current, __func__);
+                return NOTIFY_OK;
+            }
+            get_ocv_by_vol(g_smartstar_coul_dev);
+            hwlog_info("ocv update in %s. ocv_update_cnt = %d. average current = %d.\n",
+                        __func__, ocv_update_cnt, avg_current);
+            ocv_update_cnt = 0;
+        }
+    }
+    return NOTIFY_OK;
+}
+static void fatal_isc_protection(struct iscd_info *iscd, unsigned long event)
+{
+    int capacity = get_bci_soc();
+    blocking_notifier_call_chain(&iscd->isc_limit_func_head, event, &capacity);
+    if(iscd->need_monitor) {
+        schedule_delayed_work(&iscd->isc_limit_work,
+                             msecs_to_jiffies(ISC_LIMIT_CHECKING_INTERVAL));
+    }
+}
+static void isc_limit_monitor_work(struct work_struct *work)
+{
+    struct iscd_info *iscd = container_of(work, struct iscd_info, isc_limit_work);
+    fatal_isc_protection(iscd, ISC_LIMIT_UNDER_MONITOR_STAGE);
+}
+static int isc_listen_to_charge_event(struct notifier_block *self, unsigned long event, void *data)
+{
+    struct iscd_info *iscd = container_of(self, struct iscd_info, isc_listen_to_charge_event_nb);
+    switch(event) {
+    case CHARGER_START_CHARGING_EVENT:
+        if(!iscd->need_monitor) {
+            iscd->need_monitor = 1;
+            if(iscd->isc_status) {
+                fatal_isc_protection(iscd, ISC_LIMIT_START_CHARGING_STAGE);
+            }
+        }
+        break;
+    case CHARGER_STOP_CHARGING_EVENT:
+        iscd->need_monitor = 0;
+        break;
+    default:
+        break;
+    }
+    return NOTIFY_OK;
+}
+static void set_fatal_isc_action(struct iscd_info *iscd)
+{
+    if(iscd->fatal_isc_trigger_type) {
+        blocking_notifier_chain_cond_register(&charger_event_notify_head,
+                                              &iscd->isc_listen_to_charge_event_nb);
+    } else {
+        blocking_notifier_chain_unregister(&charger_event_notify_head,
+                                           &iscd->isc_listen_to_charge_event_nb);
+    }
+    if(iscd->fatal_isc_action & BIT(NORAML_CHARGING_ACTION)) {
+        blocking_notifier_chain_cond_register(&iscd->isc_limit_func_head,
+                                              &iscd->fatal_isc_chg_limit_soc_nb);
+    } else {
+        blocking_notifier_chain_unregister(&iscd->isc_limit_func_head,
+                                           &iscd->fatal_isc_chg_limit_soc_nb);
+    }
+    if(iscd->fatal_isc_action & BIT(UPLOAD_UEVENT_ACTION)) {
+        blocking_notifier_chain_cond_register(&iscd->isc_limit_func_head,
+                                              &iscd->fatal_isc_uevent_notify_nb);
+    } else {
+        blocking_notifier_chain_unregister(&iscd->isc_limit_func_head,
+                                           &iscd->fatal_isc_uevent_notify_nb);
+    }
+    if(iscd->fatal_isc_action & BIT(DIRECT_CHARGING_ACTION)) {
+        blocking_notifier_chain_cond_register(&iscd->isc_limit_func_head,
+                                              &iscd->fatal_isc_direct_chg_limit_soc_nb);
+    } else {
+        blocking_notifier_chain_unregister(&iscd->isc_limit_func_head,
+                                           &iscd->fatal_isc_direct_chg_limit_soc_nb);
+    }
+    if(iscd->fatal_isc_action & BIT(UPDATE_OCV_ACTION)) {
+        blocking_notifier_chain_cond_register(&iscd->isc_limit_func_head,
+                                              &iscd->fatal_isc_ocv_update_nb);
+    } else {
+        blocking_notifier_chain_unregister(&iscd->isc_limit_func_head,
+                                           &iscd->fatal_isc_ocv_update_nb);
+    }
+    if(iscd->fatal_isc_action & BIT(UPLOAD_DMD_ACTION)) {
+        blocking_notifier_chain_cond_register(&iscd->isc_limit_func_head,
+                                              &iscd->fatal_isc_dsm_report_nb);
+    } else {
+        blocking_notifier_chain_unregister(&iscd->isc_limit_func_head,
+                                           &iscd->fatal_isc_dsm_report_nb);
+    }
+}
 static int iscd_sample_ocv_soc_uAh(struct smartstar_coul_device *di, int ocv_uv, long * const ocv_soc_uAh)
 {
     int pc;
@@ -4946,8 +5256,8 @@ static int iscd_sample_battery_ocv_uv(struct smartstar_coul_device *di, int *ocv
     hwlog_info("ISCD sampled ocv is %duV\n", *ocv_uv);
     return ret;
 }
-static int iscd_sample_battery_info
-                                    (struct smartstar_coul_device *di, struct iscd_sample_info *sample_info)
+static int iscd_sample_battery_info(struct smartstar_coul_device *di,
+                                    struct iscd_sample_info *sample_info)
 {
     int ret;
     int ocv_uv = 0;
@@ -5027,6 +5337,7 @@ static void iscd_remove_sampled_info(struct smartstar_coul_device *di, int from,
     hwlog_info("iscd remove sampled info from index %d to index %d\n", from, to);
     for(i = to + 1, j = 0; i < di->iscd->size && i >= 0 && from + j >= 0; i++, j++) {
         di->iscd->sample_info[(int)(from+j)].sample_time = di->iscd->sample_info[i].sample_time; //pclint 679
+        di->iscd->sample_info[(int)(from+j)].sample_cnt = di->iscd->sample_info[i].sample_cnt;
         di->iscd->sample_info[(int)(from+j)].tbatt = di->iscd->sample_info[i].tbatt;
         di->iscd->sample_info[(int)(from+j)].ocv_volt_uv = di->iscd->sample_info[i].ocv_volt_uv;
         di->iscd->sample_info[(int)(from+j)].cc_value = di->iscd->sample_info[i].cc_value;
@@ -5326,9 +5637,9 @@ static int iscd_is_short_current_valid(struct smartstar_coul_device *di)
     }
 
     chrg_cycle = coul_battery_cycle_count();
-    if (chrg_cycle <= ISCD_CHARGE_CYCLE_MIN) {
+    if (chrg_cycle < di->iscd->isc_valid_cycles ) {
         hwlog_err("ISCD %s charge_cycle(%d) is less than %d, try to next loop.\n",
-                          __func__, chrg_cycle, ISCD_CHARGE_CYCLE_MIN);
+                  __func__, chrg_cycle, di->iscd->isc_valid_cycles);
        return ISCD_INVALID;
     }
 
@@ -5467,37 +5778,190 @@ static int iscd_dsm_report(struct smartstar_coul_device *di, int level)
 
     return ret;
 }
-static int iscd_protection(struct smartstar_coul_device *di, int level)
+static void __successive_isc_judgement(struct iscd_info *iscd, int time_limit)
 {
-    if (!di || level >= ISCD_MAX_LEVEL) {
-        hwlog_err("ISCD %s input para error\n", __func__);
-        return ERROR;
+    int i;
+    int j;
+    int delt_year;
+    int delt_day;
+    int last;
+    if(!iscd) {
+        hwlog_err("Null input pointer iscd found in %s\n", __func__);
+        return;
     }
-    return SUCCESS;
+    last = iscd->fatal_isc_hist.valid_num - 1;
+    for(j = iscd->fatal_isc_trigger.valid_num; j > 0; j--) {
+        for( i = last; i >= 0; i--) {
+            if(iscd->fatal_isc_hist.isc[i] < iscd->fatal_isc_trigger.trigger_isc[j-1])
+                break;
+            if(time_limit) {
+                delt_year = (int)iscd->fatal_isc_hist.year[last] -
+                            (int)iscd->fatal_isc_hist.year[i];
+                if( delt_year < 0 || delt_year > 1) {
+                    delt_day = -1;
+                } else {
+                    delt_day = (delt_year?ISC_DAYS_PER_YEAR:0) + iscd->fatal_isc_hist.yday[last] -
+                                iscd->fatal_isc_hist.yday[i];
+                }
+                if( delt_day > iscd->fatal_isc_trigger.deadline || delt_day < 0) {
+                    break;
+                }
+            }
+        }
+        if((last - i) >= iscd->fatal_isc_trigger.trigger_num[j-1]) {
+            iscd->isc_status = j;
+            iscd->fatal_isc_hist.isc_status = j;
+            iscd->fatal_isc_hist.dmd_report = 1;
+            break;
+        }
+    }
 }
-static int iscd_process_short_current(struct smartstar_coul_device *di)
+static inline void successive_isc_judgement_time(struct iscd_info *iscd)
 {
-    int ret = SUCCESS;
+    __successive_isc_judgement(iscd, ISC_TRIGGER_WITH_TIME_LIMIT);
+}
+static void fatal_isc_judgement(struct iscd_info *iscd, int type)
+{
+    if(!iscd) {
+        hwlog_err("Null input pointer iscd found in %s\n", __func__);
+        return;
+    }
+    switch(type) {
+    case INVALID_ISC_JUDGEMENT:
+        iscd->isc_status = 0;
+        iscd->need_monitor = 0;
+        break;
+    case SUCCESSIVE_ISC_JUDGEMENT_TIME:
+        if(ISC_APP_READY == iscd->app_ready)
+        {
+            iscd->fatal_isc_hist.trigger_type = SUCCESSIVE_ISC_JUDGEMENT_TIME;
+            successive_isc_judgement_time(iscd);
+        }
+        else
+        {
+            iscd->fatal_isc_hist.trigger_type = INVALID_ISC_JUDGEMENT;
+        }
+        break;
+    default:
+        hwlog_err("Unexpected type(%d) found in %s.\n", type, __func__);
+        break;
+    }
+    if(iscd->isc_status) {
+        hwlog_info("fatal isc(%d) was found by using judgement type(%d)", iscd->isc_status, type);
+    }
+}
+static int smallest_in_oneday(struct iscd_info *iscd, struct rtc_time *tm)
+{
+    if(iscd->isc == ISCD_FATAL_LEVEL_THREHOLD) {
+        return 0;
+    }
+    if(iscd->fatal_isc_hist.valid_num == 0 || iscd->fatal_isc_hist.valid_num > MAX_FATAL_ISC_NUM) {
+        return 1;
+    } else {
+        if(iscd->fatal_isc_hist.yday[iscd->fatal_isc_hist.valid_num - 1 ] == tm->tm_yday) {
+            if(iscd->isc < iscd->fatal_isc_hist.isc[iscd->fatal_isc_hist.valid_num - 1] ) {
+                iscd->fatal_isc_hist.valid_num--;
+                return 1;
+            } else {
+                return 0;
+            }
+        } else {
+            return 1;
+        }
+    }
+}
+static void update_isc_hist(struct smartstar_coul_device *di,
+                            int (*valid)(struct iscd_info *iscd, struct rtc_time *tm))
+{
+    int i;
+    struct timespec ts;
+    struct rtc_time tm;
+    if(!di) {
+        hwlog_err("Null input pointer di found in %s.\n", __func__);
+        return;
+    }
+    if(!valid) {
+        hwlog_err("Null valid function found in %s.\n", __func__);
+        return;
+    }
+    ts = current_kernel_time();
+    rtc_time64_to_tm(ts.tv_sec, &tm);
+    tm.tm_year += TM_YEAR_OFFSET;
+    if(valid(di->iscd, &tm)) {
+        if(di->iscd->fatal_isc_hist.valid_num < MAX_FATAL_ISC_NUM) {
+            di->iscd->fatal_isc_hist.isc[di->iscd->fatal_isc_hist.valid_num] = di->iscd->isc;
+            di->iscd->fatal_isc_hist.rm[di->iscd->fatal_isc_hist.valid_num] = di->batt_rm;
+            di->iscd->fatal_isc_hist.fcc[di->iscd->fatal_isc_hist.valid_num] = di->batt_fcc;
+            di->iscd->fatal_isc_hist.qmax[di->iscd->fatal_isc_hist.valid_num] = di->qmax;
+            di->iscd->fatal_isc_hist.charge_cycles[di->iscd->fatal_isc_hist.valid_num] = di->batt_chargecycles;
+            di->iscd->fatal_isc_hist.year[di->iscd->fatal_isc_hist.valid_num] = tm.tm_year;
+            di->iscd->fatal_isc_hist.yday[di->iscd->fatal_isc_hist.valid_num] = tm.tm_yday;
+            di->iscd->fatal_isc_hist.valid_num++;
+        } else if(di->iscd->fatal_isc_hist.valid_num == MAX_FATAL_ISC_NUM) {
+            for(i = 0; i < MAX_FATAL_ISC_NUM-1; i++) {
+                di->iscd->fatal_isc_hist.isc[i] = di->iscd->fatal_isc_hist.isc[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.rm[i] = di->iscd->fatal_isc_hist.rm[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.fcc[i] = di->iscd->fatal_isc_hist.fcc[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.qmax[i] = di->iscd->fatal_isc_hist.qmax[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.charge_cycles[i] = di->iscd->fatal_isc_hist.charge_cycles[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.year[i] = di->iscd->fatal_isc_hist.year[i+1L];/*lint !e690*/
+                di->iscd->fatal_isc_hist.yday[i] = di->iscd->fatal_isc_hist.yday[i+1L];/*lint !e690*/
+            }
+            di->iscd->fatal_isc_hist.isc[i] = di->iscd->isc;
+            di->iscd->fatal_isc_hist.rm[i] = di->batt_rm;
+            di->iscd->fatal_isc_hist.fcc[i] = di->batt_fcc;
+            di->iscd->fatal_isc_hist.qmax[i] = di->qmax;
+            di->iscd->fatal_isc_hist.charge_cycles[i] = di->batt_chargecycles;
+            di->iscd->fatal_isc_hist.year[i] = tm.tm_year;
+            di->iscd->fatal_isc_hist.yday[i] = tm.tm_yday;
+        } else {
+            di->iscd->fatal_isc_hist.valid_num = 1;
+            di->iscd->fatal_isc_hist.isc[0] = di->iscd->isc;
+            di->iscd->fatal_isc_hist.rm[0] = di->batt_rm;
+            di->iscd->fatal_isc_hist.fcc[0] = di->batt_fcc;
+            di->iscd->fatal_isc_hist.qmax[0] = di->qmax;
+            di->iscd->fatal_isc_hist.charge_cycles[0] = di->batt_chargecycles;
+            di->iscd->fatal_isc_hist.year[0] = tm.tm_year;
+            di->iscd->fatal_isc_hist.yday[0] = tm.tm_yday;
+        }
+        hwlog_info("fatal isc(%d):%d %d %d %d %d (%d is valid).\n",
+                    di->iscd->fatal_isc_hist.isc_status,
+                    di->iscd->fatal_isc_hist.isc[0], di->iscd->fatal_isc_hist.isc[1],
+                    di->iscd->fatal_isc_hist.isc[2], di->iscd->fatal_isc_hist.isc[3],
+                    di->iscd->fatal_isc_hist.isc[4], di->iscd->fatal_isc_hist.valid_num);
+        fatal_isc_judgement(di->iscd, di->iscd->fatal_isc_trigger_type);
+        isc_splash2_file_sync(di->iscd);
+    }
+}
+static void iscd_process_short_current(struct smartstar_coul_device *di)
+{
+    int ret = 0;
     int i;
 
     if (!di) {
-        hwlog_err("ISCD %s di is null\n", __func__);
-        return ERROR;
+        hwlog_err("Null pointer di found in %s.\n", __func__);
+        return ;
     }
-    hwlog_info("%s ++\n", __func__);
+
     for (i = 0; i < di->iscd->total_level; i++) {
         if (di->iscd->isc >= di->iscd->level_config[i].isc_min &&
             di->iscd->isc < di->iscd->level_config[i].isc_max) {
             hwlog_info("ISCD isc: %duA,  level: %d, threhold: [%d, %d)uA\n", di->iscd->isc, i,
                      di->iscd->level_config[i].isc_min, di->iscd->level_config[i].isc_max);
             ret |= iscd_dsm_report(di, i);
-            ret |= iscd_protection(di, i);
             break;
         }
     }
-    hwlog_info("%s --\n", __func__);
+    if(ret) {
+        hwlog_err("Reporting ISC level %d DMD failed in %s\n", i, __func__);
+    }
 
-    return ret;
+    /* update the isc history information */
+    update_isc_hist(di, smallest_in_oneday);
+    if(di->iscd->isc_status) {
+        di->iscd->enable = DISABLED;
+        fatal_isc_protection(di->iscd, ISC_LIMIT_BOOT_STAGE);
+    }
 }
 static int iscd_calc_short_current(struct smartstar_coul_device *di, int rm_flag)
 {
@@ -5573,7 +6037,7 @@ static void check_batt_critical_electric_leakage(struct smartstar_coul_device *d
         if ((di->batt_fcc/UA_PER_MA >= (int)di->batt_data->fcc/HALF) &&
             (di->batt_ruc * PERCENT >= di->batt_fcc * FCC_MAX_PERCENT ||
             di->batt_fcc/UA_PER_MA * PERCENT >= (int)di->batt_data->fcc*FCC_MAX_PERCENT)) {
-            di->iscd->isc = ISCD_FITAL_LEVEL_THREHOLD;
+            di->iscd->isc = ISCD_FATAL_LEVEL_THREHOLD;
             hwlog_err("ISCD rm = %d, fcc = %d, set internal short current to %dmA.\n",
                             di->batt_ruc, di->batt_fcc, di->iscd->isc/UA_PER_MA);
             iscd_process_short_current(di);
@@ -5585,7 +6049,6 @@ static void iscd_work(struct work_struct *work)
     int ret = 0;
     struct smartstar_coul_device *di = g_smartstar_coul_dev;
     struct iscd_sample_info *sample_info;
-    hwlog_info("ISCD %s ++\n", __func__);
 
     if (!di) {
         hwlog_info("ISCD %s di is null.\n", __func__);
@@ -5611,16 +6074,19 @@ static void iscd_work(struct work_struct *work)
                 if (ISCD_VALID == ret)
                     iscd_process_short_current(di);
             }
-            iscd_timer_start(di, (time_t)di->iscd->sample_time_interval);
+            if(ENABLED == di->iscd->enable) {
+                iscd_timer_start(di, (time_t)di->iscd->sample_time_interval);
+            }
         } else {
-            iscd_timer_start(di, (time_t)di->iscd->sample_time_interval/QUARTER);
+            if(ENABLED == di->iscd->enable) {
+                iscd_timer_start(di, (time_t)di->iscd->sample_time_interval/QUARTER);
+            }
         }
     }
     kfree(sample_info);
 FuncEnd:
     coul_wake_unlock();
 
-    hwlog_info("ISCD %s --\n", __func__);
 }
 static enum hrtimer_restart iscd_timer_func(struct hrtimer *timer)
 {
@@ -5979,6 +6445,57 @@ static int coul_sysfs_create_group(struct smartstar_coul_device *di)
 static inline void coul_sysfs_remove_group(struct smartstar_coul_device *di) {}
 #endif
 
+static ssize_t decress_batt_flag_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+    struct smartstar_coul_device *di = dev_get_drvdata(dev);
+    if((NULL == di)||(NULL == di->batt_data->pc_temp_ocv_lut0))
+        return 0;
+    if(strstr(saved_command_line, "batt_decress_flag=true"))
+        return snprintf_s(buf, PAGE_SIZE, PAGE_SIZE-1,"%d--%d\n", 1,di->batt_data->pc_temp_ocv_lut0->ocv[0][0]);
+    else
+        return snprintf_s(buf, PAGE_SIZE, PAGE_SIZE-1,"%d--%d\n", 0,di->batt_data->pc_temp_ocv_lut0->ocv[0][0]);
+}
+
+static int decress_vol_clear_battery_data(struct smartstar_coul_device *di)
+{
+     if(di == NULL)
+        return 0;
+     di->batt_chargecycles = 0;
+     di->batt_changed_flag = 1;
+     di->batt_limit_fcc = 0;
+     di->adjusted_fcc_temp_lut = NULL; /* enable it when test ok */
+     di->is_nv_need_save = 1;
+     if(NULL == di->coul_dev_ops)
+         return 0;
+     di->coul_dev_ops->set_nv_save_flag(NV_SAVE_FAIL);
+     di->coul_dev_ops->clear_last_soc_flag();
+     /*clear safe record fcc*/
+     di->nv_info.latest_record_index = 0;
+     my_nv_info.latest_record_index = 0;
+     memset_s(di->nv_info.real_fcc_record,sizeof(di->nv_info.real_fcc_record),0,sizeof(di->nv_info.real_fcc_record));
+     memset_s(my_nv_info.real_fcc_record,sizeof(my_nv_info.real_fcc_record),0,sizeof(my_nv_info.real_fcc_record));
+     hwlog_debug("battery changed, clean charge data!\n");
+     return 1;
+}
+static ssize_t do_clear_chg_data(struct device *dev,struct device_attribute *attr, const char *buf, size_t count)
+{
+     struct smartstar_coul_device *di = dev_get_drvdata(dev);
+     if(decress_vol_clear_battery_data(di))
+         hwlog_debug("clear chg data done");
+     return 0;
+}
+static DEVICE_ATTR(decress_flag, S_IRUGO, decress_batt_flag_show, do_clear_chg_data);
+
+struct attribute * flag_attr[]={
+    &dev_attr_decress_flag.attr,
+    NULL,
+};
+
+static struct attribute_group flag_group = {
+    .attrs = flag_attr,
+};
+
+
 static int coul_create_sysfs(struct smartstar_coul_device *di)
 {
     int retval;
@@ -6006,6 +6523,11 @@ static int coul_create_sysfs(struct smartstar_coul_device *di)
             retval = sysfs_create_link(&coul_dev->kobj, &di->dev->kobj, "coul_data");
             if (0 != retval)
                 hwlog_err("%s failed to create sysfs link!!!\n", __FUNCTION__);
+            else if(dec_state == BATTERY_DEC_ENABLE){//DTS configuration create sysfs nodes
+            retval = sysfs_create_group(&di->dev->kobj, &flag_group);
+            if (0 != retval)
+                hwlog_err("%s failed to create sysfs flag group!!!\n", __FUNCTION__);
+            }
         } else {
             hwlog_err("%s failed to create new_dev!!!\n", __FUNCTION__);
         }
@@ -6196,6 +6718,8 @@ static void coul_core_get_basp_policy(struct device_node* np, struct smartstar_c
 
 	/* basp_policy para */
 	array_len = of_property_count_u32_elems(np, "basp_policy");
+	if(strstr(saved_command_line, "batt_decress_flag=true"))
+		array_len = of_property_count_u32_elems(np, "basp_policy_bypass");
 	if ((array_len <= 0) ||(array_len % BASP_MEM_CNT != 0)) {
 		di->basp_total_level = 0;
 		hwlog_err(BASP_TAG"basp_policy is invaild, please check basp_policy number!!\n");
@@ -6204,6 +6728,8 @@ static void coul_core_get_basp_policy(struct device_node* np, struct smartstar_c
 		hwlog_err(BASP_TAG"basp_policy is too long, use only front %d paras!!\n" , array_len);
 	} else {
 		ret = of_property_read_u32_array(np, "basp_policy", basp_tmp, array_len);
+		 if(strstr(saved_command_line, "batt_decress_flag=true"))
+			 ret = of_property_read_u32_array(np, "basp_policy_bypass", basp_tmp, array_len);
 		if (ret) {
 		di->basp_total_level = 0;
 		hwlog_err(BASP_TAG"dts:get basp_policy fail!\n");
@@ -6227,124 +6753,134 @@ static void coul_core_get_basp_policy(struct device_node* np, struct smartstar_c
 		}
 	}
 }
-static void coul_core_get_iscd_dsm_config(struct device_node* np, struct smartstar_coul_device* di)
+static void get_dec_enable_status(struct device_node* np)
+{
+    if(NULL == np){
+        hwlog_err("%s np is null!\n",__FUNCTION__);
+        return;
+    }
+    if(of_property_read_u32(np, "dec_enable", &dec_state))//dec_enable control function is enable or disable
+        hwlog_err("dts error:get dec_enable value failed!\n");
+}
+static void coul_core_get_iscd_dsm_config(struct device_node* np, struct iscd_info *iscd)
 {
     int ret = 0;
     int i = 0;
     int array_len;
     u32 config_tmp[ISCD_LEVEL_CONFIG_CNT*ISCD_MAX_LEVEL];
 
-    if (!di ||!np) {
-        hwlog_info("ISCD %s di is null.\n", __func__);
+    if (!iscd || !np) {
+        hwlog_info("iscd or np inside %s is null.\n", __func__);
         return;
     }
 
     /* iscd dsm config para */
     array_len = of_property_count_u32_elems(np, "iscd_level_info");
     if ((array_len <= 0) ||(array_len % ISCD_LEVEL_CONFIG_CNT != 0)) {
-        di->iscd->total_level = 0;
+        iscd->total_level = 0;
         hwlog_err("ISCD iscd_level_info is invaild, please check iscd_level_info number!!\n");
     } else if (array_len > (int)ISCD_MAX_LEVEL * ISCD_LEVEL_CONFIG_CNT) {
-        di->iscd->total_level  = 0;
+        iscd->total_level  = 0;
         hwlog_err("ISCD iscd_level_info is too long, use only front %d paras!!\n" , array_len);
     } else {
         ret = of_property_read_u32_array(np, "iscd_level_info", config_tmp, (unsigned long)(long)array_len);
         if (ret) {
-            di->iscd->total_level  = 0;
+            iscd->total_level  = 0;
             hwlog_err("ISCD dts:get iscd_level_info fail!\n");
         } else {
-            di->iscd->total_level  = array_len / ISCD_LEVEL_CONFIG_CNT;
-            for (i = 0; i < di->iscd->total_level; i++) {
-                di->iscd->level_config[i].isc_min = (int)config_tmp[(int)(ISCD_ISC_MIN+ISCD_LEVEL_CONFIG_CNT*i)]; /*(int) for pclint and can never be out of bounds*/
-                di->iscd->level_config[i].isc_max = (int)config_tmp[(int)(ISCD_ISC_MAX+ISCD_LEVEL_CONFIG_CNT*i)];
-                di->iscd->level_config[i].dsm_err_no = (int)config_tmp[(int)(ISCD_DSM_ERR_NO+ISCD_LEVEL_CONFIG_CNT*i)];
-                di->iscd->level_config[i].dsm_report_cnt = (int)config_tmp[(int)(ISCD_DSM_REPORT_CNT+ISCD_LEVEL_CONFIG_CNT*i)];
-                di->iscd->level_config[i].dsm_report_time = config_tmp[(int)(ISCD_DSM_REPORT_TIME+ISCD_LEVEL_CONFIG_CNT*i)];
-                di->iscd->level_config[i].protection_type = (int)config_tmp[(int)(ISCD_PROTECTION_TYPE+ISCD_LEVEL_CONFIG_CNT*i)];
+            iscd->total_level  = array_len / ISCD_LEVEL_CONFIG_CNT;
+            for (i = 0; i < iscd->total_level; i++) {
+                iscd->level_config[i].isc_min = (int)config_tmp[(int)(ISCD_ISC_MIN+ISCD_LEVEL_CONFIG_CNT*i)]; /*(int) for pclint and can never be out of bounds*/
+                iscd->level_config[i].isc_max = (int)config_tmp[(int)(ISCD_ISC_MAX+ISCD_LEVEL_CONFIG_CNT*i)];
+                iscd->level_config[i].dsm_err_no = (int)config_tmp[(int)(ISCD_DSM_ERR_NO+ISCD_LEVEL_CONFIG_CNT*i)];
+                iscd->level_config[i].dsm_report_cnt = (int)config_tmp[(int)(ISCD_DSM_REPORT_CNT+ISCD_LEVEL_CONFIG_CNT*i)];
+                iscd->level_config[i].dsm_report_time = config_tmp[(int)(ISCD_DSM_REPORT_TIME+ISCD_LEVEL_CONFIG_CNT*i)];
+                iscd->level_config[i].protection_type = (int)config_tmp[(int)(ISCD_PROTECTION_TYPE+ISCD_LEVEL_CONFIG_CNT*i)];
                 hwlog_info("ISCD level[%d], isc_min: %-6d isc_max: %-7d dsm_err_no: %-9d dsm_report_cnt: %d dsm_report_time:%ld dsm_protection_type:%d\n",
-                     i, di->iscd->level_config[i].isc_min, di->iscd->level_config[i].isc_max,
-                     di->iscd->level_config[i].dsm_err_no, di->iscd->level_config[i].dsm_report_cnt,
-                     di->iscd->level_config[i].dsm_report_time, di->iscd->level_config[i].protection_type);
+                     i, iscd->level_config[i].isc_min, iscd->level_config[i].isc_max,
+                     iscd->level_config[i].dsm_err_no, iscd->level_config[i].dsm_report_cnt,
+                     iscd->level_config[i].dsm_report_time, iscd->level_config[i].protection_type);
             }
         }
     }
 }
-static void coul_core_get_iscd_info(struct device_node* np, struct smartstar_coul_device* di)
+static void coul_core_get_iscd_info(struct device_node* np, struct iscd_info *iscd)
 {
     int ret;
 
-    if (!di ||!np) {
-        hwlog_info("ISCD %s di is null.\n", __func__);
+    if (!iscd ||!np) {
+        hwlog_info("ISCD %s iscd is null.\n", __func__);
         return;
     }
 
-    ret = of_property_read_s32(np, "iscd_enable", &di->iscd->enable);
+    ret = of_property_read_s32(np, "iscd_enable", &iscd->enable);
     if (ret) {
         hwlog_err("get iscd_enable fail, use default one !!\n");
-        di->iscd->enable = DISABLED;
+        iscd->enable = DISABLED;
     }
-    hwlog_info("ISCD iscd_enable = %d\n", di->iscd->enable);
-    ret = of_property_read_s32(np, "iscd_ocv_min", &di->iscd->ocv_min);
+    hwlog_info("ISCD iscd_enable = %d\n", iscd->enable);
+    ret = of_property_read_s32(np, "iscd_ocv_min", &iscd->ocv_min);
     if (ret) {
         hwlog_err("get iscd_ocv_min fail, use default one !!\n");
-        di->iscd->ocv_min = ISCD_DEFAULT_OCV_MIN;
+        iscd->ocv_min = ISCD_DEFAULT_OCV_MIN;
     }
-    hwlog_info("ISCD ocv_min = %d\n", di->iscd->ocv_min);
-    ret = of_property_read_s32(np, "iscd_batt_temp_min", &di->iscd->tbatt_min);
+    hwlog_info("ISCD ocv_min = %d\n", iscd->ocv_min);
+    ret = of_property_read_s32(np, "iscd_batt_temp_min", &iscd->tbatt_min);
     if (ret) {
         hwlog_err("get iscd_batt_temp_min fail, use default one !!\n");
-        di->iscd->tbatt_min = ISCD_DEFAULT_TBATT_MIN;
+        iscd->tbatt_min = ISCD_DEFAULT_TBATT_MIN;
     }
-    hwlog_info("ISCD tbatt_min = %d\n", di->iscd->tbatt_min);
-    ret = of_property_read_s32(np, "iscd_batt_temp_max", &di->iscd->tbatt_max);
+    hwlog_info("ISCD tbatt_min = %d\n", iscd->tbatt_min);
+    ret = of_property_read_s32(np, "iscd_batt_temp_max", &iscd->tbatt_max);
     if (ret) {
         hwlog_err("get iscd_batt_temp_max fail, use default one !!\n");
-        di->iscd->tbatt_max = ISCD_DEFAULT_TBATT_MAX;
+        iscd->tbatt_max = ISCD_DEFAULT_TBATT_MAX;
     }
-    hwlog_info("ISCD tbatt_max = %d\n", di->iscd->tbatt_max);
-    ret = of_property_read_s32(np, "iscd_batt_temp_diff_max", &di->iscd->tbatt_diff_max);
+    hwlog_info("ISCD tbatt_max = %d\n", iscd->tbatt_max);
+    ret = of_property_read_s32(np, "iscd_batt_temp_diff_max", &iscd->tbatt_diff_max);
     if (ret) {
         hwlog_err("get iscd_batt_temp_diff_max fail, use default one !!\n");
-        di->iscd->tbatt_diff_max = ISCD_DEFAULT_TBATT_DIFF;
+        iscd->tbatt_diff_max = ISCD_DEFAULT_TBATT_DIFF;
     }
-    hwlog_info("ISCD tbatt_diff_max = %d\n", di->iscd->tbatt_diff_max);
-    ret = of_property_read_s32(np, "iscd_sample_time_interval", &di->iscd->sample_time_interval);
+    hwlog_info("ISCD tbatt_diff_max = %d\n", iscd->tbatt_diff_max);
+    ret = of_property_read_s32(np, "iscd_sample_time_interval", &iscd->sample_time_interval);
     if (ret) {
         hwlog_err("get iscd_sample_time_interval fail, use default one !!\n");
-        di->iscd->sample_time_interval = ISCD_DEFAULT_SAMPLE_INTERVAL;
+        iscd->sample_time_interval = ISCD_DEFAULT_SAMPLE_INTERVAL;
     }
-    hwlog_info("ISCD sample_time_interval = %d\n", di->iscd->sample_time_interval);
-    ret = of_property_read_s32(np, "iscd_sample_time_delay", &di->iscd->sample_time_delay);
+    hwlog_info("ISCD sample_time_interval = %d\n", iscd->sample_time_interval);
+    ret = of_property_read_s32(np, "iscd_sample_time_delay", &iscd->sample_time_delay);
     if (ret) {
         hwlog_err("get iscd_sample_time_delay fail, use default one !!\n");
-        di->iscd->sample_time_delay = ISCD_DEFAULT_SAMPLE_DELAY;
+        iscd->sample_time_delay = ISCD_DEFAULT_SAMPLE_DELAY;
     }
-    hwlog_info("ISCD sample_time_delay = %d\n", di->iscd->sample_time_delay);
-    ret = of_property_read_s32(np, "iscd_calc_time_interval_min", &di->iscd->calc_time_interval_min);
+    hwlog_info("ISCD sample_time_delay = %d\n", iscd->sample_time_delay);
+    ret = of_property_read_s32(np, "iscd_calc_time_interval_min", &iscd->calc_time_interval_min);
     if (ret) {
         hwlog_err("get iscd_calc_time_interval_min fail, use default one !!\n");
-        di->iscd->calc_time_interval_min = ISCD_DEFAULT_CALC_INTERVAL_MIN;
+        iscd->calc_time_interval_min = ISCD_DEFAULT_CALC_INTERVAL_MIN;
     }
-    hwlog_info("ISCD calc_time_interval_min = %d\n", di->iscd->calc_time_interval_min);
-    ret = of_property_read_s32(np, "iscd_level_warning_threhold", &di->iscd->isc_warning_threhold);
+    hwlog_info("ISCD calc_time_interval_min = %d\n", iscd->calc_time_interval_min);
+    ret = of_property_read_s32(np, "iscd_level_warning_threhold", &iscd->isc_warning_threhold);
     if (ret) {
         hwlog_err("get iscd_level_warning_threhold fail, use default one !!\n");
-        di->iscd->isc_warning_threhold = ISCD_WARNING_LEVEL_THREHOLD;
+        iscd->isc_warning_threhold = ISCD_WARNING_LEVEL_THREHOLD;
     }
-    hwlog_info("ISCD isc_warning_threhold = %d\n", di->iscd->isc_warning_threhold);
-    ret = of_property_read_s32(np, "iscd_level_error_threhold", &di->iscd->isc_error_threhold);
+    hwlog_info("ISCD isc_warning_threhold = %d\n", iscd->isc_warning_threhold);
+    ret = of_property_read_s32(np, "iscd_level_error_threhold", &iscd->isc_error_threhold);
     if (ret) {
         hwlog_err("get iscd_level_error_threhold fail, use default one !!\n");
-        di->iscd->isc_error_threhold = ISCD_ERROR_LEVEL_THREHOLD;
+        iscd->isc_error_threhold = ISCD_ERROR_LEVEL_THREHOLD;
     }
-    hwlog_info("ISCD isc_error_threhold = %d\n", di->iscd->isc_error_threhold);
-    ret = of_property_read_s32(np, "iscd_level_critical_threhold", &di->iscd->isc_critical_threhold);
+    hwlog_info("ISCD isc_error_threhold = %d\n", iscd->isc_error_threhold);
+    ret = of_property_read_s32(np, "iscd_level_critical_threhold", &iscd->isc_critical_threhold);
     if (ret) {
         hwlog_err("get iscd_level_critical_threhold fail, use default one !!\n");
-        di->iscd->isc_critical_threhold = ISCD_CRITICAL_LEVEL_THREHOLD;
+        iscd->isc_critical_threhold = ISCD_CRITICAL_LEVEL_THREHOLD;
     }
-    hwlog_info("ISCD isc_critical_threhold = %d\n", di->iscd->isc_critical_threhold);
-    coul_core_get_iscd_dsm_config(np, di);
+    hwlog_info("ISCD isc_critical_threhold = %d\n", iscd->isc_critical_threhold);
+    coul_core_get_iscd_dsm_config(np, iscd);
+    iscd->isc_valid_cycles = ISCD_CHARGE_CYCLE_MIN;
 }
 static void check_low_temp_opt(struct device_node* np)
 {
@@ -6444,7 +6980,7 @@ static void coul_core_get_dts(struct smartstar_coul_device *di)
 	}
 	di->r_pcb = r_pcb;
     hwlog_info("dts:get r_pcb = %d! \n",r_pcb);
-
+    get_dec_enable_status(np);
     if (of_property_read_u32(np, "adc_batt_id",&adc_batt_id)){
 		hwlog_err("dts:can not get batt id adc channel,use default channel: %d!\n",adc_batt_id);
     }
@@ -6528,7 +7064,6 @@ static void coul_core_get_dts(struct smartstar_coul_device *di)
     }
 
     coul_core_get_basp_policy(np, di);
-    coul_core_get_iscd_info(np, di);
 
     if (of_property_read_u32(np, "soc_monitor_limit", &soc_monitor_limit)) {
         hwlog_err("dts:get soc_monitor_limit fail, use default limit value!\n");
@@ -6590,6 +7125,711 @@ static void battery_para_check(struct smartstar_coul_device *di)
         }
     }
 }
+int get_batt_reset_flag(void)
+{
+    if(!g_smartstar_coul_dev) {
+        hwlog_err("g_smartstar_coul_dev is null found in %s.\n", __func__);
+        return 0;
+    }
+    return g_smartstar_coul_dev->batt_reset_flag;
+}
+/*
+ *kernel should not op files in the filesystem that managered by user space
+ *transplant this function into user space is prefered
+ */
+static void isc_hist_info_init(struct work_struct *work)
+{
+    int flags;
+    int read_size;
+    struct file *fd;
+    int file_des;
+    char *buff;
+    char *find_str;
+    mm_segment_t old_fs;
+    struct iscd_info *iscd = container_of(work, struct iscd_info, isc_splash2_work);
+
+    if(iscd->isc_splash2_ready) {
+        hwlog_info("ISC splash2 has been initialized, so does not need to be reinitialized.\n");
+        return;
+    }
+
+    /* checking if splash2 had been mounted */
+    buff = kzalloc(MOUNTS_INFO_FILE_MAX_SIZE, GFP_KERNEL);
+    if(!buff) {
+        hwlog_err("kzalloc size(%d) in kernel failed in %s.\n",
+                  MOUNTS_INFO_FILE_MAX_SIZE, __func__);
+        goto isc_init_retry;
+    }
+    fd = filp_open(F2FS_MOUNTS_INFO, O_RDONLY, 0);
+    if (IS_ERR(fd)) {
+        hwlog_err("Open %s failed in %s.\n", F2FS_MOUNTS_INFO, __func__);
+        goto isc_splash2_mount_file;
+    }
+    read_size = kernel_read(fd, 0, buff, MOUNTS_INFO_FILE_MAX_SIZE);
+    if(read_size < 0) {
+        hwlog_err("Read %s failed(%d) in %s.\n", F2FS_MOUNTS_INFO, read_size, __func__);
+        goto isc_read_proc_mounts;
+    }
+    buff[MOUNTS_INFO_FILE_MAX_SIZE-1] = 0;
+    find_str = strstr(buff, SPLASH2_MOUNT_INFO);
+    if(!find_str) {
+        hwlog_err("%s not mounted yet.\n", SPLASH2_MOUNT_INFO);
+        goto isc_read_proc_mounts;
+    }
+    filp_close(fd, NULL);
+    hwlog_info("splash2 had been mounted...\n");
+
+    /* create directory /splash2/isc for data */
+    hwlog_info("checking directory %s...\n", ISC_DATA_DIRECTORY);
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    file_des = sys_access(ISC_DATA_DIRECTORY, 0);
+    /* case for different errors need differenr process here */
+    if (file_des < 0) {
+        hwlog_info("Access directory %s failed(%d) in %s.\n",
+                   ISC_DATA_DIRECTORY, file_des, __func__);
+        file_des = sys_mkdir(ISC_DATA_DIRECTORY, 0770);
+        if (file_des < 0) {
+            hwlog_err("Create directory %s for recording fatal isc failed(%d) in %s\n",
+                      ISC_DATA_DIRECTORY, file_des, __func__);
+            set_fs(old_fs);
+            goto isc_init_buff_free;
+        }
+    }
+
+    /* init isc history information from /splash2/isc/isc.data */
+    flags = O_RDWR | O_CREAT | (get_batt_reset_flag() ? O_TRUNC : 0);
+    fd = filp_open(ISC_DATA_FILE, flags, 0660);
+    if (IS_ERR(fd)) {
+        hwlog_err("Open and create %s failed in %s.\n", ISC_DATA_FILE, __func__);
+        goto isc_init_buff_free;
+    }
+    read_size = kernel_read(fd, 0, buff, sizeof(isc_history)+1);
+    filp_close(fd, NULL);
+    if(read_size == sizeof(isc_history)) {
+        hwlog_info("fatal isc datum file size was correct.\n");
+        memcpy(&iscd->fatal_isc_hist, buff, read_size);
+        if(iscd->fatal_isc_hist.magic_num == FATAL_ISC_MAGIC_NUM) {
+            if(iscd->fatal_isc_trigger_type == iscd->fatal_isc_hist.trigger_type) {
+                iscd->isc_status = iscd->fatal_isc_hist.isc_status;
+            }else{
+                fatal_isc_judgement(iscd, iscd->fatal_isc_trigger_type);
+                isc_splash2_file_sync(iscd);
+            }
+            if(iscd->isc_status) {
+                iscd->enable = DISABLED;
+                spin_lock(&iscd->boot_complete);
+                iscd->isc_splash2_ready = 1;
+                iscd->uevent_wait_for_send = 1;
+                if(iscd->app_ready) {
+                    iscd->uevent_wait_for_send = 0;
+                    spin_unlock(&iscd->boot_complete);
+                    fatal_isc_protection(iscd, ISC_LIMIT_BOOT_STAGE);
+                } else {
+                    spin_unlock(&iscd->boot_complete);
+                }
+            }
+        } else {
+            hwlog_info("fatal isc datum file was damaged.\n");
+            iscd->fatal_isc_hist.isc_status = 0;
+            iscd->fatal_isc_hist.valid_num = 0;
+            iscd->fatal_isc_hist.magic_num = FATAL_ISC_MAGIC_NUM;
+        }
+    } else {
+        hwlog_info("fatal isc datum file size was uncorrect.\n");
+    }
+    spin_lock(&iscd->boot_complete);
+    iscd->isc_splash2_ready = 1;
+    spin_unlock(&iscd->boot_complete);
+    hwlog_info("%s was fined by %s.\n", ISC_DATA_FILE, __func__);
+
+isc_init_buff_free:
+    kfree(buff);
+    buff = NULL;
+    return;
+
+isc_read_proc_mounts:
+    filp_close(fd, NULL);
+isc_splash2_mount_file:
+    kfree(buff);
+    buff = NULL;
+isc_init_retry:
+    if(iscd->isc_datum_init_retry < ISC_SPLASH2_INIT_RETRY) {
+        iscd->isc_datum_init_retry++;
+        schedule_delayed_work(&iscd->isc_splash2_work, msecs_to_jiffies(WAIT_FOR_SPLASH2_INTERVAL));
+    }
+}
+
+static ssize_t isc_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    spin_lock(&iscd->boot_complete);
+    iscd->app_ready = 1;
+    if(!iscd->isc_splash2_ready) {
+        spin_unlock(&iscd->boot_complete);
+        schedule_delayed_work(&iscd->isc_splash2_work, 0);
+    } else if(iscd->uevent_wait_for_send) {
+        iscd->uevent_wait_for_send = 0;
+        spin_unlock(&iscd->boot_complete);
+        fatal_isc_protection(iscd, ISC_LIMIT_BOOT_STAGE);
+    } else {
+        spin_unlock(&iscd->boot_complete);
+    }
+
+    return sprintf(buf, "%d", iscd->isc_status);
+}
+static ssize_t isc_shutdown_status_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    spin_lock(&iscd->boot_complete);
+    if(!iscd->isc_splash2_ready) {
+        spin_unlock(&iscd->boot_complete);
+        schedule_delayed_work(&iscd->isc_splash2_work, 0);
+    } else if(iscd->uevent_wait_for_send) {
+        iscd->uevent_wait_for_send = 0;
+        spin_unlock(&iscd->boot_complete);
+        fatal_isc_protection(iscd, ISC_LIMIT_BOOT_STAGE);
+    } else {
+        spin_unlock(&iscd->boot_complete);
+    }
+
+    return sprintf(buf, "%d", iscd->isc_status);
+}
+static ssize_t isc_limit_support_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return sprintf(buf, "%d", iscd->fatal_isc_trigger_type);
+}
+
+static DEVICE_ATTR_RO(isc);
+static DEVICE_ATTR_RO(isc_shutdown_status);
+static DEVICE_ATTR_RO(isc_limit_support);
+
+static struct attribute *isc_func_attrs[] = {
+    &dev_attr_isc.attr,
+    &dev_attr_isc_shutdown_status.attr,
+    &dev_attr_isc_limit_support.attr,
+    NULL,
+};
+
+#ifdef ISC_TEST
+static ssize_t isc_status_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->isc_status);
+}
+static ssize_t isc_status_store(struct device *dev, struct device_attribute *attr,
+                                       const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ( kstrtol(buf, 10, &val) < 0 )
+        return -EINVAL;
+    iscd->isc_status = val?1:0;
+
+    return count;
+}
+static ssize_t fatal_isc_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+    int val;
+    int i;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    val = snprintf(buf, PAGE_SIZE, "status:%02x trigger:%02x valid num:%02x dmd:%02x version:%08x\n",
+                   iscd->fatal_isc_hist.isc_status, iscd->fatal_isc_hist.trigger_type,
+                   iscd->fatal_isc_hist.valid_num, iscd->fatal_isc_hist.dmd_report,
+                   iscd->fatal_isc_hist.magic_num);
+    val += snprintf(buf + val, PAGE_SIZE, "%11s%11s%11s%11s%11s%6s%6s\n",
+                   "ISC(uA)", "FCC", "RM", "QMAX", "CYCLES", "YEAR", "YDAY");
+    for( i = 0; i < MAX_FATAL_ISC_NUM; i++) {
+        val += snprintf(buf + val, PAGE_SIZE, "%11d%11d%11d%11d%11d%6d%6d\n",
+                        iscd->fatal_isc_hist.isc[i], iscd->fatal_isc_hist.fcc[i],
+                        iscd->fatal_isc_hist.rm[i], iscd->fatal_isc_hist.qmax[i],
+                        iscd->fatal_isc_hist.charge_cycles[i], iscd->fatal_isc_hist.year[i],
+                        iscd->fatal_isc_hist.yday[i]);
+        if(val > (PAGE_SIZE >> 1)) {
+            break;
+        }
+    }
+    return val;
+}
+static ssize_t fatal_isc_store(struct device *dev, struct device_attribute *attr,
+                                     const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ( kstrtol(buf, 10, &val) < 0 || val < 0)
+        return -EINVAL;
+    iscd->isc = val;
+    hwlog_info("one fatal isc set to %ld.\n", val);
+    update_isc_hist(g_smartstar_coul_dev, smallest_in_oneday);
+    if(iscd->isc_status) {
+        iscd->enable = DISABLED;
+        fatal_isc_protection(iscd, ISC_LIMIT_BOOT_STAGE);
+    }
+    return count;
+}
+static ssize_t isc_prompt_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+    int val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    val = snprintf(buf, PAGE_SIZE, "%d\n", iscd->isc_prompt);
+    iscd->isc_prompt = 0;
+    return val;
+}
+static ssize_t isc_prompt_store(struct device *dev, struct device_attribute *attr,
+                                     const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    __fatal_isc_uevent(&iscd->fatal_isc_uevent_work);
+    return count;
+}
+static ssize_t isc_dmd_only_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+    return snprintf(buf, PAGE_SIZE, "%d\n",
+                    !(iscd->fatal_isc_action & (~BIT(UPLOAD_DMD_ACTION))));
+}
+static ssize_t isc_dmd_only_store(struct device *dev, struct device_attribute *attr,
+                                          const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ( kstrtol(buf, 10, &val) < 0 )
+    return -EINVAL;
+    val = !!val;
+    iscd->fatal_isc_action = 0;
+    if(iscd->fatal_isc_trigger_type != INVALID_ISC_JUDGEMENT) {
+        if(val != FATAL_ISC_DMD_ONLY) {
+            iscd->fatal_isc_action |= BIT(NORAML_CHARGING_ACTION);
+            iscd->fatal_isc_action |= BIT(DIRECT_CHARGING_ACTION);
+            iscd->fatal_isc_action |= BIT(UPLOAD_UEVENT_ACTION);
+        }
+        iscd->fatal_isc_action |= BIT(UPLOAD_DMD_ACTION);
+    }
+    set_fatal_isc_action(iscd);
+    return count;
+}
+static ssize_t isc_trigger_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->fatal_isc_trigger_type);
+}
+static ssize_t isc_trigger_type_store(struct device *dev, struct device_attribute *attr,
+                                                     const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ((kstrtol(buf, 10, &val) < 0) || iscd->isc_status)
+        return -EINVAL;
+    iscd->fatal_isc_trigger_type = (unsigned int)val;
+
+    return count;
+}
+static ssize_t isc_charge_limit_soc_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->fatal_isc_soc_limit[UPLIMIT]);
+}
+static ssize_t isc_charge_limit_soc_store(struct device *dev, struct device_attribute *attr,
+                                                     const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ((kstrtol(buf, 10, &val) < 0) || (val < 0) || (val > 100))
+        return -EINVAL;
+    iscd->fatal_isc_soc_limit[UPLIMIT] = (val <= iscd->fatal_isc_soc_limit[RECHARGE]) ?
+                                         (iscd->fatal_isc_soc_limit[RECHARGE] + 1) : val;
+    return count;
+}
+static ssize_t isc_recharge_soc_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->fatal_isc_soc_limit[RECHARGE]);
+}
+static ssize_t isc_recharge_soc_store(struct device *dev, struct device_attribute *attr,
+                                                const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if ((kstrtol(buf, 10, &val) < 0) || (val < 0) || (val > 100))
+        return -EINVAL;
+    iscd->fatal_isc_soc_limit[RECHARGE] = (val >= iscd->fatal_isc_soc_limit[UPLIMIT]) ?
+                                          (iscd->fatal_isc_soc_limit[UPLIMIT] - 1) : val;
+    return count;
+}
+static ssize_t isc_valid_cycles_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->isc_valid_cycles);
+}
+static ssize_t isc_valid_cycles_store(struct device *dev, struct device_attribute *attr,
+                                                const char *buf, size_t count)
+{
+    struct iscd_info *iscd;
+    long val;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return -EINVAL;
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    if (kstrtol(buf, 10, &val) < 0)
+        return -EINVAL;
+    iscd->isc_valid_cycles = val;
+    return count;
+}
+static ssize_t isc_monitor_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct iscd_info *iscd;
+
+    if(!g_smartstar_coul_dev || !g_smartstar_coul_dev->iscd) {
+        hwlog_err("g_smartstar_coul_dev is Null found in %s.\n", __func__);
+        return sprintf(buf, "Error");
+    }
+    iscd = g_smartstar_coul_dev->iscd;
+
+    return snprintf(buf, PAGE_SIZE, "%d\n", iscd->need_monitor);
+}
+
+static DEVICE_ATTR_RW(isc_status);
+static DEVICE_ATTR_RW(fatal_isc);
+static DEVICE_ATTR_RW(isc_prompt);
+static DEVICE_ATTR_RW(isc_dmd_only);
+static DEVICE_ATTR_RW(isc_trigger_type);
+static DEVICE_ATTR_RW(isc_charge_limit_soc);
+static DEVICE_ATTR_RW(isc_recharge_soc);
+static DEVICE_ATTR_RW(isc_valid_cycles);
+static DEVICE_ATTR_RO(isc_monitor);
+
+static struct attribute *isc_test_attrs[] = {
+    &dev_attr_isc_status.attr,
+    &dev_attr_fatal_isc.attr,
+    &dev_attr_isc_prompt.attr,
+    &dev_attr_isc_dmd_only.attr,
+    &dev_attr_isc_trigger_type.attr,
+    &dev_attr_isc_charge_limit_soc.attr,
+    &dev_attr_isc_recharge_soc.attr,
+    &dev_attr_isc_valid_cycles.attr,
+    &dev_attr_isc_monitor.attr,
+    NULL,
+};
+
+static const struct attribute_group isc_test_group = {
+    .name = "isc_test",
+    .attrs = isc_test_attrs,
+};
+#endif
+
+static const struct attribute_group isc_func_group = {
+	.attrs = isc_func_attrs,
+};
+static const struct attribute_group * isc_groups[] = {
+    &isc_func_group,
+#ifdef ISC_TEST
+    &isc_test_group,
+#endif
+    NULL,
+};
+
+static void fatal_isc_init(struct device_node* np, struct iscd_info *iscd)
+{
+    int ret;
+    int i;
+    int j;
+    struct class *hw_power;
+    struct device *battery = NULL;
+    u32 temp[__MAX_FATAL_ISC_ACTION_TYPE] = {0};
+
+    spin_lock_init(&iscd->boot_complete);
+
+    hw_power = hw_power_get_class();
+    if(!hw_power) {
+        hwlog_err("Can't get hw_power class in %s.\n", __func__);
+    } else {
+        battery = device_create(hw_power, NULL, 0, NULL, "battery");
+    }
+
+    if(!battery) {
+        hwlog_err("Can't create device battery in %s.\n", __func__);
+    } else {
+        ret = sysfs_create_groups(&battery->kobj, isc_groups);
+        if(ret) {
+            hwlog_err("creat isc attribute groups under battery failed in %s.\n", __func__);
+        }
+    }
+
+    /* read out fatal isc device tree settings */
+    ret = of_property_read_u32_index(np, "fatal_isc_soc_limit", 0,
+                                     &iscd->fatal_isc_soc_limit[RECHARGE]);
+    if(ret) {
+        hwlog_info("Can't read out fatal_isc_soc_limit first u32 from device tree.\n");
+        iscd->fatal_isc_soc_limit[RECHARGE] = DEFAULT_FATAL_ISC_RECHAGE_SOC;
+    }
+    iscd->fatal_isc_soc_limit[RECHARGE] = (iscd->fatal_isc_soc_limit[RECHARGE] < 100) ?
+                                          iscd->fatal_isc_soc_limit[RECHARGE] : 99;
+
+    ret = of_property_read_u32_index(np, "fatal_isc_soc_limit", 1,
+                                     &iscd->fatal_isc_soc_limit[UPLIMIT]);
+    if(ret) {
+        hwlog_info("Can't read out fatal_isc_soc_limit second u32 from device tree.\n");
+        iscd->fatal_isc_soc_limit[UPLIMIT] = DEFAULT_FATAL_ISC_UPLIMIT_SOC;
+    }
+    iscd->fatal_isc_soc_limit[UPLIMIT] =
+        (iscd->fatal_isc_soc_limit[UPLIMIT] <= iscd->fatal_isc_soc_limit[RECHARGE]) ?
+        (iscd->fatal_isc_soc_limit[RECHARGE] + 1) : iscd->fatal_isc_soc_limit[UPLIMIT];
+
+    ret = of_property_read_u32(np, "fatal_isc_trigger_type", &iscd->fatal_isc_trigger_type);
+    if(ret) {
+        hwlog_info("fatal_isc_trigger_type not defined in device tree.\n");
+        iscd->fatal_isc_trigger_type = INVALID_ISC_JUDGEMENT;
+    }
+
+    /* set up fatal isc trigger function */
+    switch(iscd->fatal_isc_trigger_type) {
+    case INVALID_ISC_JUDGEMENT:
+        break;
+    case SUCCESSIVE_ISC_JUDGEMENT_TIME:
+        ret = of_property_count_elems_of_size(np, "fatal_isc_trigger_condition", sizeof(int));
+        if( ret <= 0 || (ret%ELEMS_PER_CONDITION) != 0 ||
+            ret > (ELEMS_PER_CONDITION*MAX_FATAL_ISC_NUM) ) {
+            hwlog_err("Uncorrect fatal_isc_trigger_condition size(%d).\n", ret);
+            iscd->fatal_isc_trigger_type = INVALID_ISC_JUDGEMENT;
+        } else {
+            iscd->fatal_isc_trigger.valid_num = ret/ELEMS_PER_CONDITION;
+            ret = 0;
+            for( i = 0, j = 0; i < iscd->fatal_isc_trigger.valid_num; i++, j += 3) {
+                ret |= of_property_read_u32_index(np, "fatal_isc_trigger_condition",
+                                                  j + FATAL_ISC_TRIGGER_NUM_OFFSET,
+                                                  &iscd->fatal_isc_trigger.trigger_num[i]);
+                ret |= of_property_read_u32_index(np, "fatal_isc_trigger_condition",
+                                        j + FATAL_ISC_TRIGGER_ISC_OFFSET,
+                                        (unsigned int *) (&iscd->fatal_isc_trigger.trigger_isc[i]));
+                ret |= of_property_read_u32_index(np, "fatal_isc_trigger_condition",
+                                        j + FATAL_ISC_TRIGGER_DMD_OFFSET,
+                                        (unsigned int *) (&iscd->fatal_isc_trigger.dmd_no[i]));
+            }
+            if(ret) {
+                hwlog_err("Read fatal_isc_trigger_condition failed.\n");
+                iscd->fatal_isc_trigger_type = INVALID_ISC_JUDGEMENT;
+            }
+            ret = of_property_read_u32(np, "fatal_isc_deadline", &iscd->fatal_isc_trigger.deadline);
+            if(ret) {
+                hwlog_info("fatal_isc_deadline not defined in device tree.\n");
+                iscd->fatal_isc_trigger.deadline = DEFAULT_FATAL_ISC_DEADLINE;
+            }
+        }
+        break;
+    default:
+        iscd->fatal_isc_trigger_type = INVALID_ISC_JUDGEMENT;
+        break;
+    }
+
+    /* fatal isc works */
+    INIT_DELAYED_WORK(&iscd->isc_splash2_work, isc_hist_info_init);
+    INIT_DELAYED_WORK(&iscd->dmd_reporter.work, fatal_isc_dmd_wkfunc);
+    INIT_DELAYED_WORK(&iscd->isc_limit_work, isc_limit_monitor_work);
+    INIT_WORK(&iscd->fatal_isc_uevent_work, __fatal_isc_uevent);
+
+    /* isc limitations setting up */
+    iscd->fatal_isc_action = 0;
+    ret = of_property_read_u32_array(np, "fatal_isc_actions", temp, __MAX_FATAL_ISC_ACTION_TYPE);
+    if(ret) {
+        hwlog_info("fatal_isc_actions not defined or right size in device tree.\n");
+    } else {
+        if(temp[UPDATE_OCV_ACTION]) {
+            ret = of_property_read_u32(np, "fatal_isc_ocv_update_interval", &iscd->ocv_update_interval);
+            if(ret) {
+                hwlog_info("fatal_isc_ocv_update_interval not defined in device tree.\n");
+                temp[UPDATE_OCV_ACTION] = 0;
+            } else if(ISC_LIMIT_CHECKING_INTERVAL == 0) {
+                hwlog_info("ISC_LIMIT_CHECKING_INTERVAL is 0 found in %s.\n", __func__);
+                temp[UPDATE_OCV_ACTION] = 0;
+            } else {
+                iscd->ocv_update_interval /= (ISC_LIMIT_CHECKING_INTERVAL/MSEC_PER_SEC);
+            }
+        }
+        for (i = 0; i < __MAX_FATAL_ISC_ACTION_TYPE; i++){
+            if(temp[i]) {
+                iscd->fatal_isc_action |= BIT(i);
+            }
+        }
+    }
+
+    BLOCKING_INIT_NOTIFIER_HEAD(&iscd->isc_limit_func_head);
+    iscd->fatal_isc_direct_chg_limit_soc_nb.notifier_call = fatal_isc_direct_chg_limit_soc;
+    iscd->fatal_isc_chg_limit_soc_nb.notifier_call = fatal_isc_chg_limit_soc;
+    iscd->fatal_isc_uevent_notify_nb.notifier_call = fatal_isc_uevent_notify;
+    iscd->isc_listen_to_charge_event_nb.notifier_call = isc_listen_to_charge_event;
+    iscd->fatal_isc_ocv_update_nb.notifier_call = fatal_isc_ocv_update;
+    iscd->fatal_isc_dsm_report_nb.notifier_call = fatal_isc_dsm_report;
+    set_fatal_isc_action(iscd);
+
+    /* isc history datum initalization */
+    if(iscd->fatal_isc_trigger_type != INVALID_ISC_JUDGEMENT) {
+        /* set fatal_isc_hist.magic_num which is version of isc history datum */
+        iscd->fatal_isc_hist.magic_num = FATAL_ISC_MAGIC_NUM;
+        /* init fatal_isc_hist by splash2 file, here wair for splash2 mounted */
+        schedule_delayed_work(&iscd->isc_splash2_work, msecs_to_jiffies(WAIT_FOR_SPLASH2_START));
+    }
+    hwlog_info("fatal isc trigger type was %d.\n", iscd->fatal_isc_trigger_type);
+}
+static void iscd_probe(struct smartstar_coul_device *di)
+{
+    struct device_node *np;
+    struct iscd_info *iscd;
+
+    iscd = kzalloc(sizeof(struct iscd_info), GFP_KERNEL);
+    if (NULL == iscd) {
+        hwlog_err("%s failed to alloc iscd struct\n",__FUNCTION__);
+        return;/*lint !e429*/
+    }
+    di->iscd = iscd;
+    iscd_reset_isc_buffer(di);
+        INIT_DELAYED_WORK(&iscd->delayed_work, iscd_work);
+        hrtimer_init(&iscd->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+        iscd->timer.function = iscd_timer_func;
+    np = of_find_compatible_node(NULL, NULL, "hisi,soft-isc");
+    if(np == NULL){
+        hwlog_err("isc dts node can't find in %s", __func__);
+    } else {
+        coul_core_get_iscd_info(np, iscd);
+        fatal_isc_init(np, iscd);
+    }
+
+}
+static void iscd_remove(struct smartstar_coul_device *di)
+{
+    if(di && di->iscd) {
+        kfree(di->iscd);
+        di->iscd = NULL;
+    }
+}
 /*******************************************************
   Function:        hisi_coul_probe
   Description:     probe function
@@ -6602,7 +7842,6 @@ static int  hisi_coul_probe(struct platform_device *pdev)
     struct hisi_coul_ops *coul_ops = NULL;
     struct smartstar_coul_device *di = NULL;
     int retval = 0;
-    struct iscd_info *iscd;
 
 
     di = (struct smartstar_coul_device *)devm_kzalloc(&pdev->dev,sizeof(*di), GFP_KERNEL);
@@ -6610,14 +7849,7 @@ static int  hisi_coul_probe(struct platform_device *pdev)
 		hwlog_err("%s failed to alloc di struct\n",__FUNCTION__);
 		return -1;
     }
-    iscd = kzalloc(sizeof(*iscd), GFP_KERNEL);
-    if (NULL == iscd) {
-        hwlog_err("%s failed to alloc iscd struct\n",__FUNCTION__);
-        return -1;/*lint !e429*/
-    }
-    di->iscd = iscd;
     di->low_vol_filter_cnt = LOW_INT_VOL_COUNT;
-    iscd_reset_isc_buffer(di);
 
     di->dev =&pdev->dev;
     if (!g_coul_core_ops) {
@@ -6703,9 +7935,6 @@ static int  hisi_coul_probe(struct platform_device *pdev)
     INIT_DELAYED_WORK(&di->calculate_soc_delayed_work, calculate_soc_work);
     INIT_WORK(&di->fault_work, coul_fault_work);
     INIT_DELAYED_WORK(&di->read_temperature_delayed_work, read_temperature_work);
-    INIT_DELAYED_WORK(&di->iscd->delayed_work, iscd_work);
-    hrtimer_init(&di->iscd->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    di->iscd->timer.function = iscd_timer_func;
 
     di->fault_nb.notifier_call = coul_fault_notifier_call;
     retval = atomic_notifier_chain_register(&coul_fault_notifier_list, &di->fault_nb);
@@ -6731,6 +7960,7 @@ static int  hisi_coul_probe(struct platform_device *pdev)
     if(di->coul_dev_ops->is_battery_moved()){
         di->batt_chargecycles = 0;
         di->batt_changed_flag = 1;
+        di->batt_reset_flag = 1;
         di->batt_limit_fcc = 0;
         di->adjusted_fcc_temp_lut = NULL; /* enable it when test ok */
         di->is_nv_need_save = 1;
@@ -6824,6 +8054,7 @@ coul_no_battery:
     coul_cali_adc(di);
     hwlog_info("coul core probe ok!\n");
 	g_pdev = pdev;
+    iscd_probe(di);
     return 0;
 
 coul_failed_4:
@@ -6840,7 +8071,6 @@ coul_failed_1:
     platform_set_drvdata(pdev, NULL);
     g_smartstar_coul_dev = 0;
 coul_failed:
-    kfree(iscd);
     hwlog_err("coul core probe failed!\n");
     return retval;/*lint !e593*/
 }
@@ -6861,6 +8091,7 @@ static int  hisi_coul_remove(struct platform_device *pdev)
         hwlog_info("[%s]di is null\n",__FUNCTION__);
         return 0;
     }
+    iscd_remove(di);
     return 0;
 
 }

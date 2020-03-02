@@ -32,14 +32,6 @@
 #ifndef _TUNER_DRV_H
 #define _TUNER_DRV_H
 
-#ifdef DEBUG
-#include <linux/kernel.h>
-#define __file__		(strrchr( __FILE__, '/') +1)
-#define pr_fmt(fmt)	TUNER_CONFIG_DRIVER_NAME " %s(%d): " fmt, __file__, __LINE__
-#else
-#define pr_fmt(fmt)	TUNER_CONFIG_DRIVER_NAME " %s: " fmt, __FUNCTION__
-#endif
-
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
@@ -165,6 +157,7 @@ struct _tsif_cntxt {
 #define TUNER_TSREAD_TIMEOUT	0x00000004		/* Timeout */
 #define TUNER_TSREAD_END			0x80000000		/* end */
 
+#define TUNER_TSREAD_BUFF_DEF_SIZE  2069504
 
 /* 4 : Use both IL=2 and IL=4 , then packet buffer is 1.0Mb (default)*/
 /* 2 : USE ONLY IL=2 , then expand packet buffer to 2.7Mb */

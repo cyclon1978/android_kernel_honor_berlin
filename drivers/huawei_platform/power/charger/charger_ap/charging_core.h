@@ -63,6 +63,12 @@ enum inductance_para_info {
 	INDUCTANCE_PARA_TOTAL,
 };
 
+enum ccafc_run_status_type {
+	CCAFC_RUN_DEFAULT = 0,
+	CCAFC_RUN_FIRST,
+	CCAFC_RUN_ALREADY,
+};
+
 struct charge_temp_data {
 	int temp_min;
 	int temp_max;

@@ -198,6 +198,7 @@ struct sensor_power_setting ov8858_power_down_setting[] = {
 };
 
 struct mutex ov8858_power_lock;
+atomic_t volatile ov8858_powered = ATOMIC_INIT(0);
 static sensor_t s_ov8858 =
 {
     .intf = { .vtbl = &s_ov8858_vtbl, },
@@ -209,7 +210,7 @@ static sensor_t s_ov8858 =
             .size = ARRAY_SIZE(ov8858_power_down_setting),
             .power_setting = ov8858_power_down_setting,
     },
-
+    .p_atpowercnt = &ov8858_powered,
 };
 
 static const struct of_device_id s_ov8858_dt_match[] =
@@ -335,8 +336,7 @@ int ov8858_config(hwsensor_intf_t* si, void  *argp)
     cam_debug("ov8858 cfgtype = %d",data->cfgtype);
     switch(data->cfgtype){
         case SEN_CONFIG_POWER_ON:
-            if (mutex_lock_interruptible(&ov8858_power_lock))
-                return -ERESTARTSYS;
+            mutex_lock(&ov8858_power_lock);
             if(false == power_on_status){
                 ret = si->vtbl->power_up(si);
                 if (ret == 0) {
@@ -348,13 +348,13 @@ int ov8858_config(hwsensor_intf_t* si, void  *argp)
             /*lint -e455 +esym(455,*)*/
             break;
         case SEN_CONFIG_POWER_OFF:
-            if (mutex_lock_interruptible(&ov8858_power_lock))
-                return -ERESTARTSYS;
+            mutex_lock(&ov8858_power_lock);
             if(true == power_on_status){
                 ret = si->vtbl->power_down(si);
-                if (ret == 0) {
-                    power_on_status = false;
+                if (ret != 0) {
+                    cam_err("%s. power_down fail.", __func__);
                 }
+                power_on_status = false;
             }
             /*lint -e455 -esym(455,*)*/
             mutex_unlock(&ov8858_power_lock);

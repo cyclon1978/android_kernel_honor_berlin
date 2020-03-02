@@ -70,6 +70,7 @@
 extern struct ycable_info *ycable;
 #endif
 
+BLOCKING_NOTIFIER_HEAD(charger_event_notify_head);
 /*adaptor test result*/
 struct adaptor_test_attr adptor_test_tbl[] = {
 	{TYPE_SCP, "SCP", DETECT_FAIL},
@@ -102,6 +103,8 @@ static bool ts_flag = FALSE;
 static bool otg_flag = FALSE;
 static bool cancel_work_flag = FALSE;
 static int pd_charge_flag = false;
+static bool cca_enable_flag;
+
 
 #ifdef CONFIG_TCPC_CLASS
 static u32 charger_pd_support = 0;
@@ -118,6 +121,9 @@ struct hisi_charger_bootloader_info {
 extern char *get_charger_info_p(void);
 extern int is_water_intrused(void);
 static struct hisi_charger_bootloader_info hisi_charger_info = { 0 };
+static struct ccafc_charge_pattern g_ccafc_pattern = {0};
+static int ccafc_pattern_valid = FALSE;
+static int ccafc_sample_status = FALSE;
 
 #ifdef CONFIG_HISI_CHARGER_SYS_WDG
 #define CHARGE_SYS_WDG_TIMEOUT  180
@@ -425,6 +431,89 @@ static int copy_bootloader_charger_info(void)
 
 	return 0;
 }
+
+static int is_ccafc_pattern_valid(char *charge_pattern)
+{
+	int count = 0;
+
+	while ('/0' != *charge_pattern) {
+		charge_pattern = strchr(charge_pattern, ' ');
+		if (NULL == charge_pattern) {
+			break;
+		}
+		count++;
+		charge_pattern++;
+	}
+
+	if (CCAFC_STRING_SPACE_NUM != count) {
+		hwlog_err("[%s]charge pattern invalid, count is %d\n", __func__, count);
+		return -1;
+	}
+	return 0;
+}
+
+static int update_ccafc_pattern(char *charge_pattern)
+{
+	char *p_temp = NULL;
+	int i = 0, val = 0;
+
+	if (-1 == is_ccafc_pattern_valid(charge_pattern)) {
+		return -1;
+	}
+
+	for (i = 0; i < CCAFC_STRING_SPACE_NUM; i++) {
+		p_temp = strchr(charge_pattern, ' ');
+		*p_temp = '\0';
+		p_temp++;
+
+		if ((kstrtoint(charge_pattern, 10, &val) < 0) || (val < 0)) {
+			hwlog_err("[%s]convert string to integer failed\n", __func__);
+			return -1;
+		}
+
+		if (i < CCAFC_CURRENT_LOCATION){
+			g_ccafc_pattern.ccafc_current[i] = val;
+		} else if (i >= CCAFC_CURRENT_LOCATION && i < CCAFC_VOLTAGE_LOCATION) {
+			g_ccafc_pattern.ccafc_voltage[i%CCAFC_PATTERN_SIZE] = val;
+		} else {
+			g_ccafc_pattern.ccafc_mode[i%CCAFC_PATTERN_SIZE] = val;
+		}
+		charge_pattern = p_temp;
+	}
+
+	for (i = 0; i < CCAFC_PATTERN_SIZE; i++) {
+		hwlog_info("ccafc current[%d] = %d, voltage[%d] = %d, mode[%d] = %d\n", i, g_ccafc_pattern.ccafc_current[i], i, g_ccafc_pattern.ccafc_voltage[i], i, g_ccafc_pattern.ccafc_mode[i]);
+	}
+	return 0;
+}
+
+int is_ccafc_supported(int *flag)
+{
+	static int last_status;
+
+	if (TRUE == last_status && FALSE == ccafc_sample_status) {
+		*flag = 0;//reset ccafc run flag when sample end
+	}
+	last_status = ccafc_sample_status;
+
+	return ccafc_pattern_valid;
+}
+
+int get_ccafc_pattern(struct ccafc_charge_pattern *pattern)
+{
+	if (NULL == pattern) {
+		hwlog_err("%s: pattern ops is NULL!\n", __func__);
+		return FALSE;
+	}
+	memcpy(pattern, &g_ccafc_pattern, sizeof(g_ccafc_pattern));
+	return TRUE;
+}
+
+int get_ccafc_sample_status(void)
+{
+	return ccafc_sample_status;
+}
+
 /**********************************************************
 *  Function:       fcp_check_switch_status
 *  Description:    check switch chip status
@@ -657,6 +746,10 @@ static void charge_update_charger_type(struct charge_device_info *di)
 		ico_enable = 0;
 }
 
+static void charger_event_notify(int event)
+{
+	blocking_notifier_call_chain(&charger_event_notify_head, event, NULL);
+}
 /**********************************************************
 *  Function:       charge_send_uevent
 *  Discription:    send charge uevent immediately after charger type is recognized
@@ -674,12 +767,15 @@ static void charge_send_uevent(struct charge_device_info *di)
 
 	if (di->charger_source == POWER_SUPPLY_TYPE_MAINS) {
 		events = VCHRG_START_AC_CHARGING_EVENT;
+		charger_event_notify(CHARGER_START_CHARGING_EVENT);
 		hisi_coul_charger_event_rcv(events);
 	} else if (di->charger_source == POWER_SUPPLY_TYPE_USB) {
 		events = VCHRG_START_USB_CHARGING_EVENT;
+		charger_event_notify(CHARGER_START_CHARGING_EVENT);
 		hisi_coul_charger_event_rcv(events);
 	} else if (di->charger_source == POWER_SUPPLY_TYPE_BATTERY) {
 		events = VCHRG_STOP_CHARGING_EVENT;
+		charger_event_notify(CHARGER_STOP_CHARGING_EVENT);
 		hisi_coul_charger_event_rcv(events);
 	} else {
 		hwlog_err("[%s]error charger source!\n", __func__);
@@ -999,9 +1095,9 @@ static void charge_vbus_voltage_check(struct charge_device_info *di)
 			nonfcp_vbus_higher_count =
 			    VBUS_VOLTAGE_ABNORMAL_MAX_COUNT;
 			charger_dsm_report(ERROR_FCP_VOL_OVER_HIGH, &vbus_vol);
-			if (di->fcp_ops->is_fcp_charger_type
+			if (di->fcp_ops && di->fcp_ops->is_fcp_charger_type
 			    && di->fcp_ops->is_fcp_charger_type()) {
-				if (di->fcp_ops->fcp_adapter_reset()) {
+				if (di->fcp_ops->fcp_adapter_reset && di->fcp_ops->fcp_adapter_reset()) {
 					hwlog_err("adapter reset failed \n");
 				}
 
@@ -1785,6 +1881,28 @@ void charge_set_hiz_enable(int enable)
 	}
 }
 
+int set_charger_disable_flags(int val, int type)
+{
+	struct charge_device_info *di = g_di;
+	int i;
+	int disable = 0;
+	if(!di)
+	{
+		hwlog_err("NULL pointer(di) found in %s.\n", __func__);
+		return -1;
+	}
+	if(type < 0 || type >= __MAX_DISABLE_CHAGER){
+		hwlog_err("Set charger to %d with wrong type(%d) in %s.\n",
+					val, type, __func__);
+		return -1;
+	}
+	di->sysfs_data.disable_charger[type] = val;
+	for( i = 0; i < __MAX_DISABLE_CHAGER; i++){
+		disable |= di->sysfs_data.disable_charger[i];
+	}
+	di->sysfs_data.charge_enable = !disable;
+	return 0;
+}
 /**********************************************************
 *  Function:       charge_start_charging
 *  Description:    enter into charging mode
@@ -1798,7 +1916,7 @@ static void charge_start_charging(struct charge_device_info *di)
 	hwlog_info("---->START CHARGING\n");
 	charge_wake_lock();
 	if (!strstr(saved_command_line, "androidboot.swtype=factory")) {
-		di->sysfs_data.charge_enable = TRUE;
+		set_charger_disable_flags(CHARGER_CLEAR_DISABLE_FLAGS, CHARGER_SYS_NODE);
 	}
 	di->check_full_count = 0;
 	di->start_attemp_ico = 1;
@@ -1833,7 +1951,7 @@ static void charge_stop_charging(struct charge_device_info *di)
 	ico_enable = 0;
 	usb_continuous_notify_times = 0;
 	if (!strstr(saved_command_line, "androidboot.swtype=factory")) {
-		di->sysfs_data.charge_enable = FALSE;
+		set_charger_disable_flags(CHARGER_SET_DISABLE_FLAGS, CHARGER_SYS_NODE);
 	}
 	di->sysfs_data.adc_conv_rate = 0;
 	di->sysfs_data.water_intrused = 0;
@@ -2508,6 +2626,11 @@ static void charge_turn_on_charging(struct charge_device_info *di)
 	/*enable/disable charge */
 	di->charge_enable &= di->sysfs_data.charge_enable;
 	ret = di->ops->set_charge_enable(di->charge_enable);
+	if ( !di->sysfs_data.charge_enable ) {
+		hwlog_info("Disable flags: sysnode = %d, isc = %d",
+			        di->sysfs_data.disable_charger[CHARGER_SYS_NODE],
+			        di->sysfs_data.disable_charger[CHARGER_FATAL_ISC_TYPE]);
+	}
 	if (ret)
 		hwlog_err("set charge enable fail!!\n");
 	hwlog_debug
@@ -3079,6 +3202,39 @@ struct charge_sysfs_field_info {
 	u8 name;
 };
 
+///cca sys
+#define CCA_SYSFS_FIELD(_name, n, m, store)                \
+{                                                   \
+    .attr = __ATTR(_name, m, cca_sysfs_show, store),    \
+    .name = CCA_SYSFS_##n,          \
+}
+
+#define CCA_SYSFS_FIELD_RW(_name, n)               \
+	CCA_SYSFS_FIELD(_name, n, S_IWUSR | S_IRUGO, cca_sysfs_store)
+
+static ssize_t cca_sysfs_show(struct device *dev,
+				struct device_attribute *attr, char *buf);
+static ssize_t cca_sysfs_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count);
+
+struct cca_sysfs_field_info {
+	struct device_attribute attr;
+	u8 name;
+};
+static struct cca_sysfs_field_info cca_sysfs_field_tbl[] = {
+	CCA_SYSFS_FIELD_RW(cca_charge_pattern, CCA_CHARGE_PATTERN),
+	CCA_SYSFS_FIELD_RW(cca_cccv_sample, CCA_CCCV_SAMPLE),
+};
+
+
+static struct attribute *cca_sysfs_attrs[ARRAY_SIZE(cca_sysfs_field_tbl) + 1];
+
+static const struct attribute_group cca_sysfs_attr_group = {
+	.attrs = cca_sysfs_attrs,
+};
+
+
 static struct charge_sysfs_field_info charge_sysfs_field_tbl[] = {
 	CHARGE_SYSFS_FIELD_RW(adc_conv_rate, ADC_CONV_RATE),
 	CHARGE_SYSFS_FIELD_RW(iin_thermal, IIN_THERMAL),
@@ -3130,6 +3286,31 @@ static const struct attribute_group charge_sysfs_attr_group = {
 	.attrs = charge_sysfs_attrs,
 };
 
+static void cca_sysfs_init_attrs(void)
+{
+	int i, limit = ARRAY_SIZE(cca_sysfs_field_tbl);
+
+	for (i = 0; i < limit; i++) {
+		cca_sysfs_attrs[i] = &cca_sysfs_field_tbl[i].attr.attr;
+	}
+	cca_sysfs_attrs[limit] = NULL;	/* Has additional entry for this */
+}
+
+static struct cca_sysfs_field_info *cca_sysfs_field_lookup(const char *name)
+{
+	int i, limit = ARRAY_SIZE(cca_sysfs_field_tbl);
+
+	for (i = 0; i < limit; i++) {
+		if (!strncmp
+			(name, cca_sysfs_field_tbl[i].attr.attr.name,
+			strlen(name)))
+			break;
+	}
+	if (i >= limit)
+		return NULL;
+
+	return &cca_sysfs_field_tbl[i];
+}
 
 /**********************************************************
 *  Function:       charge_sysfs_init_attrs
@@ -3168,6 +3349,74 @@ static struct charge_sysfs_field_info *charge_sysfs_field_lookup(const char *nam
 
 	return &charge_sysfs_field_tbl[i];
 }
+
+static ssize_t cca_sysfs_show(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	struct cca_sysfs_field_info *info = NULL;
+	struct charge_device_info *di = dev_get_drvdata(dev);
+	int ret;
+
+	info = cca_sysfs_field_lookup(attr->attr.name);
+	if (!info)
+		return -EINVAL;
+
+	switch (info->name) {
+		case CCA_SYSFS_CCA_CHARGE_PATTERN:
+			return snprintf(buf, PAGE_SIZE, "%d\n", ccafc_pattern_valid);
+		case CCA_SYSFS_CCA_CCCV_SAMPLE:
+			return snprintf(buf, PAGE_SIZE, "%d\n", ccafc_sample_status);
+		default:
+			hwlog_err("(%s)NODE ERR!!HAVE NO THIS NODE:(%d)\n", __func__, info->name);
+			break;
+	}
+	return 0;
+}
+
+static ssize_t cca_sysfs_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct cca_sysfs_field_info *info = NULL;
+	struct charge_device_info *di = dev_get_drvdata(dev);
+	long val = 0;
+
+	info = cca_sysfs_field_lookup(attr->attr.name);
+	if (!info)
+		return -EINVAL;
+
+	switch (info->name) {
+		case CCA_SYSFS_CCA_CHARGE_PATTERN:
+			if (!buf || CCAFC_STRING_LENGTH != strlen(buf))
+				return -EINVAL;
+			if (-1 == update_ccafc_pattern(buf)) {
+				ccafc_pattern_valid = FALSE;
+				hwlog_err("[%s]update ccafc pattern failed\n", __func__);
+			} else {
+				ccafc_pattern_valid = TRUE;
+				hwlog_info("[%s]ccafc pattern is updated\n", __func__);
+			}
+			break;
+		case CCA_SYSFS_CCA_CCCV_SAMPLE:
+			if ((strict_strtol(buf, 10, &val) < 0) || (val < 0) || (val > 1))
+				return -EINVAL;
+			ccafc_sample_status = val;
+			hwlog_info("[%s]ccafc_sample_status is setted to %d\n", __func__, val);
+			break;
+		default:
+			hwlog_err("(%s)NODE ERR!!HAVE NO THIS NODE:(%d)\n", __func__, info->name);
+			break;
+	}
+	return count;
+}
+
+
+static int cca_sysfs_create_group(struct charge_device_info *di)
+{
+	cca_sysfs_init_attrs();
+	return sysfs_create_group(&di->dev->kobj, &cca_sysfs_attr_group);
+}
+
 /*lint -restore*/
 
 /**********************************************************
@@ -3544,7 +3793,9 @@ static ssize_t charge_sysfs_store(struct device *dev,
 	case CHARGE_SYSFS_ENABLE_CHARGER:
 		if ((strict_strtol(buf, 10, &val) < 0) || (val < 0) || (val > 1))
 			return -EINVAL;
-		di->sysfs_data.charge_enable = val;
+		ret = set_charger_disable_flags(
+				val?CHARGER_CLEAR_DISABLE_FLAGS:CHARGER_SET_DISABLE_FLAGS,
+				CHARGER_SYS_NODE);
 		di->sysfs_data.charge_limit = TRUE;
 		/*why should send events in this command?
 		   because it will get the /sys/class/power_supply/Battery/status immediately
@@ -3805,6 +4056,10 @@ static void charge_parse_dts(struct charge_device_info *di)
 	charge_done_sleep_dts =
 		of_property_read_bool(of_find_compatible_node(NULL, NULL, "huawei,charger"),
 			"charge_done_sleep_enabled");
+
+	cca_enable_flag =
+		of_property_read_bool(of_find_compatible_node(NULL, NULL, "huawei,charger"),
+			"cca_enable");
 
 	ret = of_property_read_u32(of_find_compatible_node(NULL, NULL, "huawei,hisi_bci_battery"),
 			"battery_board_type", &is_board_type);
@@ -4098,6 +4353,7 @@ static int charge_probe(struct platform_device *pdev)
 	di->check_full_count = 0;
 
 	charge_wake_lock();
+	type = hisi_get_charger_type();
 	if (!charger_type_ever_notify)
 	{
 #ifdef CONFIG_TCPC_CLASS
@@ -4141,6 +4397,12 @@ static int charge_probe(struct platform_device *pdev)
 	ret = charge_sysfs_create_group(di);
 	if (ret)
 		hwlog_err("can't create charge sysfs entries\n");
+	if(cca_enable_flag)
+	{
+		ret = cca_sysfs_create_group(di);
+		if (ret)
+			hwlog_err("can't create cca sysfs entries\n");
+	}
 	power_class = hw_power_get_class();
 	if (power_class) {
 		if (charge_dev == NULL)

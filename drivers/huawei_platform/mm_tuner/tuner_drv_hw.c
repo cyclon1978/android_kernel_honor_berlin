@@ -249,44 +249,6 @@ int tuner_drv_hw_relev(TUNER_DATA_EVENT *ev)
 	return 0;	/* normal return */
 }
 
-#if 0
-
-int tuner_drv_gpio_power_process(int type, int status)
-{
-	int ret = TUNER_DRV_OK; 
-
-	int gpio = TUNER_DRV_GPIO_POWER_1V8 ;
-
-	switch(type){
-		case TUNER_DRV_GPIO_POWER :
-			gpio = g_cnt.gpio_power; 
-			break;
-		case TUNER_DRV_GPIO_POWER_1V8 :
-			gpio = g_cnt.gpio_power_v18 ;
-			break;
-		case TUNER_DRV_GPIO_POWER_NRST :
-			gpio = g_cnt.gpio_nreset ;
-			break;
-		default :
-			pr_err("gpio  type is error\n");
-			return TUNER_DRV_ERROR ;
-	}
-
-#if 0
-	ret = gpio_direction_output(gpio,status); 
-	if(ret != TUNER_DRV_OK){	
-		pr_err("gpio  tuner_power direction out fail\n");
-		return ret ;
-	}
-#endif 
-
-	__gpio_set_value(gpio, status);
-
-	return ret ;
-
-} 
-#endif
-
 void tuner_drv_power_control_startup(void)
 {
 

@@ -29,10 +29,14 @@
 #include <linux/suspend.h>
 #include <linux/timer.h>
 #include <linux/rtc.h>
+#include <linux/syscalls.h>
 #ifdef CONFIG_HUAWEI_CHARGER
 #include <huawei_platform/power/huawei_charger.h>
 #else
 #include <linux/power/hisi/charger/hisi_charger.h>
+#endif
+#ifdef CONFIG_DIRECT_CHARGER
+#include <huawei_platform/power/direct_charger.h>
 #endif
 #ifndef TRUE
 #define TRUE (1)
@@ -282,7 +286,7 @@ enum ocv_level {
 #define ISCD_WARNING_LEVEL_THREHOLD  10000 //uA
 #define ISCD_ERROR_LEVEL_THREHOLD  30000 //uA
 #define ISCD_CRITICAL_LEVEL_THREHOLD  100000 //uA
-#define ISCD_FITAL_LEVEL_THREHOLD  200000 //uA
+#define ISCD_FATAL_LEVEL_THREHOLD  200000 //uA
 #define ISCD_RECHARGE_CC   1000  //uAh
 #define ISCD_LARGE_ISC_THREHOLD  50000 //uA
 #define ISCD_LARGE_ISC_VALID_SIZE      10
@@ -306,6 +310,42 @@ enum ocv_level {
 #define ISCD_DSM_REPORT_INTERVAL   (24*3600)   //24h
 #define ISCD_DSM_LOG_SIZE_MAX      (2048)
 #define ISCD_ERR_NO_STR_SIZE 128
+#define MAX_FATAL_ISC_NUM               20
+#define MAX_TRIGGER_LEVEL_NUM           5
+#define ELEMS_PER_CONDITION             3
+#define ISC_DAYS_PER_YEAR               365
+#define TM_YEAR_OFFSET                  1900
+#define DEFAULT_FATAL_ISC_DEADLINE      15
+#define DEFAULT_FATAL_ISC_UPLIMIT_SOC   60
+#define DEFAULT_FATAL_ISC_RECHAGE_SOC   55
+#define SUCCESSIVE_ISC_JUDGEMENT_TIME   1
+#define INVALID_ISC_JUDGEMENT           0
+#define UPLIMIT                         0
+#define RECHARGE                        1
+#define F2FS_MOUNTS_INFO                "/proc/mounts"
+#define MOUNTS_INFO_FILE_MAX_SIZE       4096
+#define SPLASH2_MOUNT_INFO              "/splash2"
+#define ISC_DATA_DIRECTORY              "/splash2/isc"
+#define ISC_DATA_FILE                   "/splash2/isc/isc.data"
+#define WAIT_FOR_SPLASH2_START          5000
+#define WAIT_FOR_SPLASH2_INTERVAL       1000
+#define ISC_SPLASH2_INIT_RETRY          3
+#define FATAL_ISC_DMD_RETRY             5
+#define FATAL_ISC_DMD_RETRY_INTERVAL    2500
+#define FATAL_ISC_DMD_LINE_SIZE         42
+#define FATAL_ISC_MAGIC_NUM             0x5a3c7711
+#define FATAL_ISC_TRIGGER_ISC_OFFSET    0
+#define FATAL_ISC_TRIGGER_NUM_OFFSET    1
+#define FATAL_ISC_TRIGGER_DMD_OFFSET    2
+#define FATAL_ISC_DMD_ONLY              1
+#define ISC_LIMIT_CHECKING_INTERVAL     5000
+#define ISC_LIMIT_START_CHARGING_STAGE  0
+#define ISC_LIMIT_UNDER_MONITOR_STAGE   1
+#define ISC_LIMIT_STOP_CHARGING_STAGE   2
+#define ISC_LIMIT_BOOT_STAGE            3
+#define ISC_TRIGGER_WITH_TIME_LIMIT     1
+#define ISC_APP_READY                   1
+#define FATAL_ISC_OCV_UPDATE_THRESHOLD  20
 
 #define CAPACITY_DENSE_AREA_3200	(3200000)
 #define CAPACITY_DENSE_AREA_3670	(3670000)
@@ -315,6 +355,7 @@ enum ocv_level {
 #define CAPACITY_INVALID_AREA_4500	(4500000)
 #define CAPACITY_INVALID_AREA_2500	(2500000)
 
+#define BATTERY_DEC_ENABLE 1
 enum ISCD_LEVEL_CONFIG {
     ISCD_ISC_MIN,
     ISCD_ISC_MAX,
@@ -455,9 +496,57 @@ struct iscd_level_config
     time_t dsm_report_time;
     int protection_type;
 };
+typedef struct {
+    unsigned char isc_status;
+    unsigned char valid_num;
+    unsigned char dmd_report;
+    unsigned char trigger_type;
+    unsigned int magic_num;
+    int isc[MAX_FATAL_ISC_NUM];
+    int rm[MAX_FATAL_ISC_NUM];
+    int fcc[MAX_FATAL_ISC_NUM];
+    int qmax[MAX_FATAL_ISC_NUM];
+    unsigned int charge_cycles[MAX_FATAL_ISC_NUM];
+    unsigned short year[MAX_FATAL_ISC_NUM];
+    unsigned short yday[MAX_FATAL_ISC_NUM];
+} isc_history;
+typedef struct {
+    unsigned int valid_num;
+    unsigned int deadline;
+    unsigned int trigger_num[MAX_TRIGGER_LEVEL_NUM];
+    int trigger_isc[MAX_TRIGGER_LEVEL_NUM];
+    int dmd_no[MAX_TRIGGER_LEVEL_NUM];
+} isc_trigger;
+typedef struct {
+    struct delayed_work work;
+    char * buff;
+    int err_no;
+    int retry;
+} fatal_isc_dmd;
+enum fatal_isc_action_type {
+    UPLOAD_DMD_ACTION = 0,
+    NORAML_CHARGING_ACTION,
+    DIRECT_CHARGING_ACTION,
+    UPLOAD_UEVENT_ACTION,
+    UPDATE_OCV_ACTION,
+    __MAX_FATAL_ISC_ACTION_TYPE,
+};
 struct iscd_info {
     int size;
     int isc;//internal short current, uA
+    int isc_valid_cycles;
+    unsigned int isc_status;
+    unsigned int fatal_isc_trigger_type;
+    unsigned int fatal_isc_soc_limit[2];
+    unsigned int fatal_isc_action;
+    fatal_isc_dmd dmd_reporter;
+    spinlock_t boot_complete;
+    unsigned int app_ready;
+    unsigned int uevent_wait_for_send;
+    int isc_prompt;
+    int isc_splash2_ready;
+    isc_history fatal_isc_hist;
+    isc_trigger fatal_isc_trigger;
     s64 full_update_cc;//uAh
     int last_sample_cnt; //last sample counts since charge/recharge done
     struct iscd_sample_info sample_info[ISCD_SMAPLE_LEN_MAX];
@@ -483,6 +572,19 @@ struct iscd_info {
     struct delayed_work delayed_work;/*ISCD: detect_battery short current*/
     struct hrtimer timer;
     struct mutex iscd_lock;
+    int need_monitor;
+    struct delayed_work isc_limit_work;
+    struct blocking_notifier_head isc_limit_func_head;
+    struct notifier_block fatal_isc_direct_chg_limit_soc_nb;
+    struct notifier_block fatal_isc_chg_limit_soc_nb;
+    struct work_struct fatal_isc_uevent_work;
+    struct notifier_block fatal_isc_uevent_notify_nb;
+    struct notifier_block fatal_isc_ocv_update_nb;
+    struct notifier_block fatal_isc_dsm_report_nb;
+    struct notifier_block isc_listen_to_charge_event_nb;
+    struct delayed_work isc_splash2_work;
+    int isc_datum_init_retry;
+    unsigned int ocv_update_interval;
 };
 
 struct smartstar_coul_device
@@ -493,6 +595,7 @@ struct smartstar_coul_device
     int batt_ocv_temp;
     int batt_ocv_valid_to_refresh_fcc;
     int batt_changed_flag;
+    int batt_reset_flag;
     int soc_limit_flag;
     int batt_temp; // temperature in degree*10
     int qmax;  //uAh

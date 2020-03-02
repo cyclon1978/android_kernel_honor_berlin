@@ -80,6 +80,7 @@ const struct cntry_locales_custom hw_translate_custom_table[] = {
     {"KE", "SA", 0},
     {"KW", "KW", 5},
     {"LA", "LA", 2},
+    {"LB", "BR", 4},
     {"LV", "LV", 4},
     {"LS", "LS", 2},
     {"LI", "LI", 4},

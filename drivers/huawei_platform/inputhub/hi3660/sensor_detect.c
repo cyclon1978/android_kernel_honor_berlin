@@ -308,6 +308,7 @@ struct rpc_platform_data rpc_data={
         .table = {0,},
         .mask = {0,},
         .default_value = 0,
+        .rpc_close_flag = 0,
 };
 /*lint +e785*/
 
@@ -1597,6 +1598,14 @@ static void read_rpc_data_from_dts(struct device_node* dn)
     { hwlog_err("%s:read default_value fail\n", __func__); }
     else
     {rpc_data.default_value = (uint16_t) temp; }
+
+	if (of_property_read_u32(dn, "rpc_close_mode", &temp)){
+		rpc_data.rpc_close_flag = 0;
+		hwlog_err("%s:read rpc_close_mode fail\n", __func__);
+	}
+	else {
+		rpc_data.rpc_close_flag =(uint8_t) temp;
+	}
 
     read_sensorlist_info(dn, RPC);
 }

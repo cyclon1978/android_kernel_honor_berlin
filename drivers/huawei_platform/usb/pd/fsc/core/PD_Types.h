@@ -95,8 +95,9 @@
 #define tFPF2498Transition      20      * TICK_SCALE_TO_MS
 #define tSourceRiseTimeout      350     * TICK_SCALE_TO_MS
 #define tHardResetOverhead      2       * TICK_SCALE_TO_MS
-
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#define tCableResetPoll         10      * TICK_SCALE_TO_MS
+#endif
 #define nHardResetCount         2
 #define nRetryCount             3
 #define nCapsCount              50

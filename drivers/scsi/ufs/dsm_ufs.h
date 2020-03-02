@@ -44,7 +44,7 @@
 
 struct ufs_dsm_log {
 	char dsm_log[UFS_DSM_BUFFER_SIZE];
-	spinlock_t lock; /*mutex*/
+	struct mutex lock; /*mutex*/
 };
 extern struct dsm_client *ufs_dclient;
 extern unsigned int ufs_dsm_real_upload_size;
@@ -140,7 +140,7 @@ void schedule_ufs_dsm_work(struct ufs_hba *hba);
 	do {\
 		char msg[UFS_MSG_MAX_SIZE];\
 		snprintf(msg, UFS_MSG_MAX_SIZE-1, fmt, ## a);\
-		spin_lock(&g_ufs_dsm_log.lock);\
+		mutex_lock(&g_ufs_dsm_log.lock);\
 		if (dsm_ufs_get_log(hba, (no), (msg))) {\
 			if (!dsm_client_ocuppy(ufs_dclient)) {\
 				dsm_client_copy(ufs_dclient, \
@@ -149,7 +149,7 @@ void schedule_ufs_dsm_work(struct ufs_hba *hba);
 				dsm_client_notify(ufs_dclient, (no));\
 			} \
 		} \
-		spin_unlock(&g_ufs_dsm_log.lock);\
+		mutex_unlock(&g_ufs_dsm_log.lock);\
 	} while (0)
 
 #else

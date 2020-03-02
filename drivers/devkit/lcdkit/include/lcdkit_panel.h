@@ -919,6 +919,7 @@ struct lcdkit_panel_infos
     u32 gpio_lcd_vbat;
     /*RESET*/
     u32 gpio_lcd_reset;
+    u32 gpio_tp_reset;
     /*Te*/
     u32 gpio_lcd_te;
     u32 gpio_lcd_en;
@@ -981,6 +982,7 @@ struct lcdkit_panel_infos
     u8 rst_after_vbat_flag;
     u8 lcdrst_after_tprst_flag;
     u8 lcdph_delay_set_flag;
+    u8 tddi_tp_gesture_sequence_flag;
 
     uint32_t delay_af_vsn_off;
     uint32_t delay_af_vsp_off;

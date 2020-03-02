@@ -137,6 +137,7 @@
 		hw,lcdkit-panel-dsi-upt-support = <1>;
 		hw,lcdkit-panel-vsyn-ctr-type = <0>;
 		hw,lcdkit-panel-bl-pwm-preci-type = <0>;
+		hw,lcdkit-panel-bl-pwm-out-div-value = <0>;
 		hw,lcdkit-panel-step-support = <1>;
 		hw,lcdkit-panel-xcc-set-in-isr-support = <1>;
 		hw,lcdkit-ldi-hsync-plr = <0>;
@@ -258,6 +259,7 @@
 		hw,lcdkit-id0-gpio = <15>;
 		hw,lcdkit-id1-gpio = <77>;
 		hw,lcdkit-reset-gpio = <20>;
+		hw,lcdkit-tp-reset-gpio = <145>;
 		hw,lcdkit-te-gpio = <21>;
 		hw,lcdkit-vsp-gpio = <40>;
 		hw,lcdkit-vsn-gpio = <67>;

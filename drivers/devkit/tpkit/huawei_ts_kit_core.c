@@ -1965,6 +1965,7 @@ static int get_ts_board_info(void)
     u32 bus_id = 0;
     u32 hide_plain_id = 0;
     u32 fp_tp_enable = 0;
+    u32 glove_mode_rw_disable = 0;
     u32 register_charger_notifier = 0;
     g_ts_kit_platform_data.node = NULL;
 
@@ -2065,6 +2066,14 @@ static int get_ts_board_info(void)
 		g_ts_kit_platform_data.bops->bus_id, g_ts_kit_platform_data.reset_gpio,
 		g_ts_kit_platform_data.irq_gpio, g_ts_kit_platform_data.hide_plain_id);
 
+    rc = of_property_read_u32(g_ts_kit_platform_data.node, "glove_mode_rw_disable",&glove_mode_rw_disable);
+    if (rc) {
+	    g_ts_kit_platform_data.glove_mode_rw_disable= 0;
+	    TS_LOG_INFO("glove_mode_rw_disable read return %d\n",rc);
+    }else{
+	    g_ts_kit_platform_data.glove_mode_rw_disable= glove_mode_rw_disable;
+    }
+    TS_LOG_INFO("glove_mode_rw_disable :%d\n", g_ts_kit_platform_data.glove_mode_rw_disable);
 out:
     return error;
 }

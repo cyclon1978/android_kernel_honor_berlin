@@ -125,6 +125,7 @@ enum {
 #define PART_VENDOR                    "vendor"
 #define PART_VERSION                   "version"
 #define PART_PRODUCT                   "product"
+#define PART_PRELOAD                   "preload"
 /*AB*/
 #define PART_PTABLE_LU2                "ptable_lu2"
 #define PART_PTABLE_LU3                "ptable_lu3"

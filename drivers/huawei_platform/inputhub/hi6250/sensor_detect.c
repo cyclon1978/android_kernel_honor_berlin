@@ -87,6 +87,7 @@ extern int send_para_flag;
 extern struct charge_device_ops *g_ops;
 extern struct ps_external_ir_param ps_external_ir_param;
 extern struct ps_extend_platform_data ps_extend_platform_data;
+extern int ps_support_mode;
 #ifdef CONFIG_HUAWEI_CHARGER_SENSORHUB
 extern irqreturn_t fsa9685_irq_sh_handler(int irq, void *dev_id);
 #endif
@@ -895,11 +896,25 @@ static void read_ps_data_from_dts(struct device_node *dn)
 		ps_data.ps_flag = temp;
 	}
 
+	if (of_property_read_u32(dn, "ps_support_mode", &temp)){
+		ps_support_mode = 0;
+		hwlog_err("%s:read ps_support_mode fail\n", __func__);
+	}
+	else {
+		ps_support_mode = temp;
+	}
+
 	if (of_property_read_u32(dn, "external_ir", &temp))
 		hwlog_err("%s:read mag min_proximity_value fail\n", __func__);
 	else if(temp == 1) {
 		ps_external_ir_param.external_ir = temp;
 		hwlog_err("%s:external_ir set value\n", __func__);
+
+		if (of_property_read_u32(dn, "external_ir_powermode", &temp))
+			hwlog_err("%s:read powermode fail\n", __func__);
+		else
+			ps_external_ir_param.external_ir_powermode = temp;
+
 
 		if (of_property_read_u32(dn, "external_ir_min_proximity_value", &temp))
 			hwlog_err("%s:read mag min_proximity_value fail\n", __func__);
@@ -915,6 +930,16 @@ static void read_ps_data_from_dts(struct device_node *dn)
 			hwlog_err("%s:read pwave_value fail\n", __func__);
 		else
 			ps_external_ir_param.external_ir_pwave_value = temp;
+
+		if (of_property_read_u32(dn, "external_ir_pwindows_ratio", &temp))
+			hwlog_err("%s:read pwindows_ratio fail\n", __func__);
+		else
+			ps_external_ir_param.external_ir_pwindows_ratio = temp;
+
+		if (of_property_read_u32(dn, "external_ir_pwave_ratio", &temp))
+			hwlog_err("%s:read pwave_ratio fail\n", __func__);
+		else
+			ps_external_ir_param.external_ir_pwave_ratio = temp;
 
 		if (of_property_read_u32(dn, "external_ir_threshold_value", &temp))
 			hwlog_err("%s:read threshold_value fail\n", __func__);
@@ -1241,6 +1266,16 @@ static void read_capprox_data_from_dts(struct device_node *dn)
 		{
 			sar_pdata.sar_datas.semteck_data.ph= (uint8_t)ph;
 			hwlog_info("%s:read ph:0x%x\n",__func__,sar_pdata.sar_datas.semteck_data.ph);
+		}
+		if (of_property_read_u32(dn, "offset_check", &temp))
+		{
+			sar_pdata.sar_datas.semteck_data.offset_check= 0;
+			hwlog_err("%s:read offset_check fail\n", __func__);
+		}
+		else
+		{
+			sar_pdata.sar_datas.semteck_data.offset_check= (uint16_t)temp;
+			hwlog_info("%s:read offset_check:0x%x\n",__func__,sar_pdata.sar_datas.semteck_data.offset_check);
 		}
 		calibrate_thred = sar_pdata.sar_datas.semteck_data.calibrate_thred;
 		if (sar_pdata.stage_num == 2){//sar double stage

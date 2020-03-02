@@ -285,9 +285,12 @@ void platform_set_vconn(FSC_BOOL enable);
 FSC_BOOL platform_get_vconn_swap_to_on_supported(void);
 FSC_BOOL platform_get_vconn_swap_to_off_supported(void);
 FSC_BOOL platform_get_dp_enabled(void);
+FSC_BOOL platform_get_pr_swap_wa_enabled(void);
 FSC_BOOL platform_get_product_type_ama(void);
 FSC_BOOL platform_get_modal_operation_supported(void);
 
 void platform_double_56k_cable(void);
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+void platform_double_22k_cable(void);
+#endif
 #endif  // _FSC_PLATFORM_H_

@@ -6085,22 +6085,22 @@ static int synaptics_rmi4_f12_init(struct synaptics_rmi4_data *rmi4_data,
 				   struct synaptics_rmi4_fn_desc *fd,
 				   unsigned int intr_count)
 {
-	int retval;
-	unsigned char ii;
-	unsigned char intr_offset;
-	unsigned char size_of_2d_data;
+	int retval = NO_ERR;
+	unsigned char ii = 0;
+	unsigned char intr_offset = 0;
+	unsigned char size_of_2d_data = 0;
 	unsigned char size_of_query8 = 0;
-	unsigned char ctrl_8_offset;
-	unsigned char ctrl_23_offset;
-	unsigned char ctrl_28_offset;
-	unsigned char ctrl_26_offset;
-	unsigned char num_of_fingers;
-	unsigned char ctrl_20_offset;
-	unsigned char ctrl_22_offset;
-	unsigned char data_04_offset;
+	unsigned char ctrl_8_offset = 0;
+	unsigned char ctrl_23_offset = 0;
+	unsigned char ctrl_28_offset = 0;
+	unsigned char ctrl_26_offset = 0;
+	unsigned char num_of_fingers = 0;
+	unsigned char ctrl_20_offset = 0;
+	unsigned char ctrl_22_offset = 0;
+	unsigned char data_04_offset = 0;
 	unsigned char f12_2d_data[F12_2D_CTRL_LEN] = { 0 };
-	struct synaptics_rmi4_f12_extra_data *extra_data;
-	struct synaptics_rmi4_f12_eratio_data *eratio_data;
+	struct synaptics_rmi4_f12_extra_data *extra_data = NULL;
+	struct synaptics_rmi4_f12_eratio_data *eratio_data = NULL;
 	struct synaptics_rmi4_f12_query_5 query_5;
 	struct synaptics_rmi4_f12_query_8 query_8;
 	struct synaptics_rmi4_f12_ctrl_8 ctrl_8;
@@ -6115,7 +6115,7 @@ static int synaptics_rmi4_f12_init(struct synaptics_rmi4_data *rmi4_data,
 		retval = -ENOMEM;
 		return retval;
 	}
-	fhandler->eratio_data = kmalloc(sizeof(*eratio_data), GFP_KERNEL);
+	fhandler->eratio_data = kzalloc((sizeof(*eratio_data) * F12_FINGERS_TO_SUPPORT), GFP_KERNEL);
 	if (fhandler->eratio_data == NULL) {
 		TS_LOG_ERR("Failed to alloc memory for fhandler->eratio_data\n");
 		retval = -ENOMEM;
@@ -6634,7 +6634,7 @@ static int easy_wakeup_gesture_report_coordinate(struct synaptics_rmi4_data
 						 struct ts_fingers *info)
 {
 	int retval = 0;
-	unsigned char get_custom_data[LOCUS_DATA_NUM] = { 0 };
+	unsigned char get_custom_data[LOCUS_DATA_NUM * F12_FINGERS_TO_SUPPORT+4] = { 0 };
 	int x = 0;
 	int y = 0;
 	int i = 0;
@@ -7293,7 +7293,10 @@ static void synaptics_rmi4_f12_abs_report(struct synaptics_rmi4_data *rmi4_data,
 		return;
 	}
 #endif
-
+	if(fingers_to_process > F12_FINGERS_TO_SUPPORT){
+		TS_LOG_ERR("fingers to process = %d.\n",fingers_to_process);
+		fingers_to_process = F12_FINGERS_TO_SUPPORT;
+	}
 	retval = synaptics_rmi4_i2c_read(rmi4_data,
 					 data_addr + extra_data->data1_offset,
 					 (unsigned char *)fhandler->data,

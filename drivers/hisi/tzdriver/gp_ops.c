@@ -935,7 +935,8 @@ int TZMP2_uid(TC_NS_ClientContext *client_context, TC_NS_SMC_CMD *smc_cmd, bool 
 		if (smc_cmd->cmd_id == GLOBAL_CMD_ID_OPEN_SESSION && global) {
 			/* save tzmp_uid */
 			mutex_lock(&tzmp_lock);
-			tzmp_uid = smc_cmd->uid;
+			tzmp_uid = 0; /*for multisesion, we use same uid*/
+			smc_cmd->uid = 0;
 			tlogv("openSession , tzmp_uid.uid is %d", tzmp_uid);
 			mutex_unlock(&tzmp_lock);
 

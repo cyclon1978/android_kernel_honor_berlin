@@ -39,6 +39,8 @@ enum {
 	BST_USER_START,
 };
 
+static DEFINE_SPINLOCK(create_bastet_lock);
+
 extern int adjust_traffic_flow_by_sock(struct sock *sk,
 	unsigned long tx, unsigned long rx);
 
@@ -706,13 +708,17 @@ static int do_start_bastet_sock(struct sock *sk,
 	int err = 0;
 	struct bastet_sock *bsk = sk->bastet;
 
+	spin_lock(&create_bastet_lock);
 	if (NULL == bsk) {
 		err = create_bastet_sock(sk, init_prop);
-		if (err < 0)
+		if (err < 0) {
+			spin_unlock(&create_bastet_lock);
 			return err;
+		}
 
 		bsk = sk->bastet;
 	}
+	spin_unlock(&create_bastet_lock);
 	bsk->last_sock_active_time_point = jiffies;
 
 	spin_lock_bh(&sk->sk_lock.slock);
@@ -850,15 +856,17 @@ int prepare_bastet_sock(struct bst_set_sock_sync_delay *sync_prop)
 	BASTET_LOGI("sk: %p", sk);
 
 	bsk = sk->bastet;
+	spin_lock(&create_bastet_lock);
 	if (NULL == bsk) {
 		err = create_bastet_sock(sk, sync_prop);
 		if (err < 0) {
 			sock_put(sk);
+			spin_unlock(&create_bastet_lock);
 			return err;
 		}
 		bsk = sk->bastet;
 	}
-
+	spin_unlock(&create_bastet_lock);
 	sock_put(sk);
 
 	return err;

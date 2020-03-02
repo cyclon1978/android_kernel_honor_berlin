@@ -53,6 +53,10 @@
 #define NULL 0
 #endif
 
+/* atom ft8613 */
+static unsigned focal_chip_id = 0;
+#define FT8613_CHIP_ID 0x86
+
 struct focal_platform_data *g_focal_pdata = NULL;
 struct ts_kit_device_data *g_focal_dev_data = NULL;
 struct fts_esdcheck_st fts_esdcheck_data;
@@ -107,6 +111,7 @@ static int rawdata_proc_focal_printf(struct seq_file *m, struct ts_rawdata_info 
 					int range_size, int row_size);
 
 extern void focal_param_kree(void);
+extern struct ts_kit_platform_data g_ts_kit_platform_data;
 
 struct ts_device_ops ts_focal_ops = {
 	.chip_detect = focal_chip_detect,
@@ -754,6 +759,7 @@ static int i2c_communicate_check(struct ts_kit_platform_data *focal_pdata)
 				__func__, ret, i);
 			msleep(50);
 		} else {
+			focal_chip_id = reg_val;
 			TS_LOG_INFO("%s:chip id read success, chip id:0x%X\n",
 				__func__, reg_val);
 			return NO_ERR;
@@ -830,7 +836,7 @@ static int focal_esdcheck_chip_id(void)
 			continue;
 		}
 
-		if ( (reg_value == chipid_high) || (reg_value == FTS_REG_SPECIAL_VALUEl) ){ /* Upgrade sometimes can't detect */
+		if ( (reg_value == chipid_high) || (reg_value == FT8613_CHIP_ID) || (reg_value == FTS_REG_SPECIAL_VALUEl) ){ /* Upgrade sometimes can't detect */
 			TS_LOG_DEBUG("%s:chip id read success, chip id:0x%X, i=%d\n",__func__, reg_value,i);
 			break;
 		}
@@ -1006,8 +1012,8 @@ static int focal_esdcheck_algorithm(void)
 
 static int focal_esdcheck_func(void)
 {
-	/*In cell  IC need check lcd error*/
-	if(true == g_focal_pdata->focal_device_data->is_in_cell){
+	/*In cell  IC need check lcd error*/  
+	if((true == g_focal_pdata->focal_device_data->is_in_cell) && (focal_chip_id != FT8613_CHIP_ID)){
 		TS_LOG_INFO("%s:esdcheck not support INCELL ic", __func__);
 		return -EINVAL;
 	}
@@ -1624,7 +1630,11 @@ static int focal_suspend(void)
 				focal_power_off();
 			} else {
 				/*goto sleep mode*/
+				if (FOCAL_FT8201 != g_focal_dev_data->ic_type) {
 				focal_sleep_mode_in();
+				} else {
+					gpio_direction_output(reset_gpio, 0);
+				}
 			}
 			break;
 		case TS_GESTURE_MODE:
@@ -1699,11 +1709,14 @@ static int focal_resume(void)
 {
 	int ret = NO_ERR;
 	int reset_gpio = 0;
+	struct ts_easy_wakeup_info *info = &g_focal_dev_data->easy_wakeup_info;
 
 	reset_gpio = g_focal_dev_data->ts_platform_data->reset_gpio;
 	/*ft8201 lcd need tp to set reset gpio high,so need enter resume logic*/
 	if((FOCAL_FT5X46 != g_focal_dev_data->ic_type) && (FOCAL_FT8201 != g_focal_dev_data->ic_type)){
 		TS_LOG_INFO("%s: tp ic isn't FT5X46 or FT8201, resume needn't do nothing\n", __func__);
+		if (!strcmp(g_ts_kit_platform_data.product_name, "atomu"))
+			info->easy_wakeup_flag = false; /* atomu ft8613 has gesture func too. */
 		return ret;
 	}
 
@@ -1717,15 +1730,22 @@ static int focal_resume(void)
 				gpio_direction_output(reset_gpio, 1);
 			} else {
 				/*exit sleep mode*/
-				ret = focal_gpio_reset();
-				if(NO_ERR != ret){
-					TS_LOG_ERR("%s, %d: have error\n", __func__, __LINE__);
+				if (FOCAL_FT8201 != g_focal_dev_data->ic_type) {
+					ret = focal_gpio_reset();
+					if(NO_ERR != ret){
+						TS_LOG_ERR("%s, %d: have error\n", __func__, __LINE__);
+					}
+				} else {
+					/*ft8201 is incell ic,lcd sequence just need set reset gpio high*/
+					gpio_direction_output(reset_gpio, 1);
 				}
 			}
 			break;
 		case TS_GESTURE_MODE:
-			focal_put_device_outof_easy_wakeup();
-			ret = focal_gpio_reset();
+			if (FOCAL_FT8201 != g_focal_dev_data->ic_type){
+				focal_put_device_outof_easy_wakeup();
+				ret = focal_gpio_reset();
+			}
 			if(NO_ERR != ret){
 				TS_LOG_DEBUG("%s: have error\n", __func__);
 			}
@@ -1813,6 +1833,8 @@ static int focal_after_resume(void *feature_info)
 	/*ft8201 lcd and tp need 300ms for fw load time,lcd set 35ms,tp need 265ms*/
 	if(FOCAL_FT8201 == g_focal_dev_data->ic_type){
 		msleep(FTS_SLEEP_TIME_265);
+		if (TS_GESTURE_MODE == g_focal_pdata->focal_device_data->easy_wakeup_info.sleep_mode)
+			focal_put_device_outof_easy_wakeup();
 	}
 
 	for(i=0;i<FTS_RESUME_MAX_TIMES;i++)

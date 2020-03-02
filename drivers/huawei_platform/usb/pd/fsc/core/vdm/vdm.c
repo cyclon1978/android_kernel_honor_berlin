@@ -50,6 +50,10 @@ extern  PolicyState_t   vdm_next_ps;
 extern VdmDiscoveryState_t AutoVdmState;
 extern DisplayPortConfig_t DpPpConfig;
 
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern int support_smart_holder;
+#endif
+
 VdmManager              vdmm;
 PolicyState_t           originalPolicyState;
 FSC_BOOL				vdm_timeout;
@@ -105,7 +109,11 @@ FSC_S32 requestDiscoverIdentity(SopType sop) {
 		sendVdmMessageWithTimeout(sop, __arr, __length, __n_pe);
 	} else if (	(sop == SOP_TYPE_SOP1) &&		// allow cable discovery in special earlier states
 				((PolicyState == peSourceStartup) ||
-				 (PolicyState == peSourceSendCaps))) {
+				(PolicyState == peSourceSendCaps)
+                #ifdef FSC_HAVE_CUSTOM_SRC2
+				 || ((PolicyState == peDisabled) && support_smart_holder)
+                #endif
+				)) {
 		originalPolicyState = PolicyState;
 		__n_pe = peSrcVdmIdentityRequest;
 		__vdmh.SVDM.SVID		= PD_SID;					// PD SID to be used for Discover Identity command
@@ -309,17 +317,23 @@ FSC_S32 processDiscoverIdentity(SopType sop, FSC_U32* arr_in, FSC_U32 length_in)
 		}
         }
 
-        //sendVdmMessage(sop, __arr, __length, originalPolicyState);
-        PolicyState = originalPolicyState;
-        PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
+        sendVdmMessage(sop, __arr, __length, originalPolicyState);
+        //PolicyState = originalPolicyState;
+        //PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
         return 0;
     } else { /* Incoming responses, ACKs, NAKs, BUSYs */
 
 		// Discover Identity responses should have at least VDM Header, ID Header, and Cert Stat VDO
-		if (length_in < MIN_DISC_ID_RESP_SIZE) {
-			PolicyState = originalPolicyState;
-			return 1;
+           #ifdef FSC_HAVE_CUSTOM_SRC2
+		if (!support_smart_holder) {
+           #endif
+                    if (length_in < MIN_DISC_ID_RESP_SIZE) {
+                       PolicyState = originalPolicyState;
+                       return 1;
+                    }
+           #ifdef FSC_HAVE_CUSTOM_SRC2
 		}
+           #endif
 		if ((PolicyState == peDfpUfpVdmIdentityRequest) && (sop == SOP_TYPE_SOP)) {
 			if (__vdmh_in.SVDM.CommandType == RESPONDER_ACK) {
 				PolicyState = peDfpUfpVdmIdentityAcked;
@@ -370,6 +384,10 @@ FSC_S32 processDiscoverIdentity(SopType sop, FSC_U32* arr_in, FSC_U32 length_in)
 						(PolicyState == peDfpCblVdmIdentityAcked) ||
 						(PolicyState == peSrcVdmIdentityAcked);
 		vdmm.inform_id(__result, sop, __id);
+#ifdef FSC_HAVE_CUSTOM_SRC2
+		if (support_smart_holder)
+			vdmm.inform_raw_vdo_data(__result, sop, __id, arr_in);
+#endif
         ExpectingVdmResponse = FALSE;
 		PolicyState = originalPolicyState;
         platform_set_timer(&VdmTimer, 0);
@@ -460,9 +478,9 @@ FSC_S32 processDiscoverSvids(SopType sop, FSC_U32* arr_in, FSC_U32 length_in) {
 			}
 		}
 
-		//sendVdmMessage(sop, __arr, __length, originalPolicyState);
-		PolicyState = originalPolicyState;
-		PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
+		sendVdmMessage(sop, __arr, __length, originalPolicyState);
+		//PolicyState = originalPolicyState;
+		//PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
 		return 0;
     } else { /* Incoming responses, ACKs, NAKs, BUSYs */
         __svid_info.num_svids = 0;
@@ -570,9 +588,9 @@ FSC_S32 processDiscoverModes(SopType sop, FSC_U32* arr_in, FSC_U32 length_in) {
 			}
 		}
 
-		//sendVdmMessage(sop, __arr, __length, originalPolicyState);
-		PolicyState = originalPolicyState;
-		PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
+		sendVdmMessage(sop, __arr, __length, originalPolicyState);
+		//PolicyState = originalPolicyState;
+		//PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
 		return 0;
     } else { /* Incoming responses, ACKs, NAKs, BUSYs */
         if (__vdmh_in.SVDM.CommandType == RESPONDER_ACK) {
@@ -646,9 +664,9 @@ FSC_S32 processEnterMode(SopType sop, FSC_U32* arr_in, FSC_U32 length_in) {
 		__arr_out[0] = __svdmh_out.object;
 		__length_out = 1;
 
-		//sendVdmMessage(sop, __arr_out, __length_out, originalPolicyState);
-		PolicyState = originalPolicyState;
-		PolicySendDataNoReset(DMTVenderDefined, __length_out, __arr_out, originalPolicyState, 0);
+		sendVdmMessage(sop, __arr_out, __length_out, originalPolicyState);
+		//PolicyState = originalPolicyState;
+		//PolicySendDataNoReset(DMTVenderDefined, __length_out, __arr_out, originalPolicyState, 0);
 		return 0;
     } else { /* Incoming responses, ACKs, NAKs, BUSYs */
 		if(!ExpectingVdmResponse){
@@ -719,9 +737,9 @@ FSC_S32 processExitMode(SopType sop, FSC_U32* arr_in, FSC_U32 length_in) {
 		__arr[0] = __vdmh_out.object;
 		__length = 1;
 
-        //sendVdmMessage(sop, __arr, __length, originalPolicyState);
-		PolicyState = originalPolicyState;
-		PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
+		sendVdmMessage(sop, __arr, __length, originalPolicyState);
+		//PolicyState = originalPolicyState;
+		//PolicySendDataNoReset(DMTVenderDefined, __length, __arr, originalPolicyState, 0);
 		return 0;
     } else {
 		if (__vdmh_in.SVDM.CommandType != RESPONDER_ACK) {
@@ -953,7 +971,6 @@ void resetPolicyState (void) {
 
 	ExpectingVdmResponse = FALSE;
     VdmTimerStarted = FALSE;
-
     if ((PolicyState == peGiveVdm) || (PolicyState == peSourceSoftReset)){
         PolicyState = vdm_next_ps;
     }

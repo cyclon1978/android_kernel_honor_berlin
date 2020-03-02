@@ -1124,6 +1124,7 @@ struct ts_kit_platform_data
     u32 fp_tp_enable;
     u32 register_charger_notifier;
     u32 hide_plain_id;
+    u32 glove_mode_rw_disable;
     u8 panel_id;
     struct device_node* node;
     struct i2c_client* client;

@@ -41,6 +41,9 @@
 
 #ifdef FSC_HAVE_VDM
 #include "vdm/vdm_config.h"
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#include "vdm/vdm.h"
+#endif
 #endif // FSC_HAVE_VDM
 
 #ifdef FSC_DEBUG
@@ -49,7 +52,13 @@
 
 #include <huawei_platform/usb/hw_pd_dev.h>
 #include "../Platform_Linux/platform_helpers.h"
-
+#include "../Platform_Linux/fusb30x_global.h"
+#include <linux/usb/class-dual-role.h>
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern TIMER                  PolicyStateTimer;
+extern FSC_BOOL               ExpectingVdmResponse;
+extern int                    support_smart_holder;
+#endif
 /////////////////////////////////////////////////////////////////////////////
 //      Variables accessible outside of the TypeC state machine
 /////////////////////////////////////////////////////////////////////////////
@@ -109,8 +118,10 @@ CCTermType              VCONNTerm;
 USBTypeCCurrent         SinkCurrent;            // Variable to indicate the current capability we have received
 FSC_U8           loopCounter = 0;        // Used to count the number of Unattach<->AttachWait loops
 USBTypeCCurrent  SourceCurrent;                 // Variable to indicate the current capability we are broadcasting
-
-
+#ifdef FSC_HAVE_CUSTOM_SRC2
+FSC_BOOL                huawei_emarker_detected_;
+FSC_U8                  huawei_emarker_tries_ = 0;
+#endif
 /////////////////////////////////////////////////////////////////////////////
 // Tick at 100us
 /////////////////////////////////////////////////////////////////////////////
@@ -428,6 +439,12 @@ void StateMachineTypeC(void)
             case DebugAccessorySink:
                 StateMachineDebugAccessorySink();
                 break;
+#ifdef FSC_HAVE_CUSTOM_SRC2
+            case EmarkerCheck:
+                if (support_smart_holder)
+                    StateMachineEmarkerCheck();
+                break;
+#endif
 #endif /* FSC_HAVE_SNK */
 #endif // FSC_HAVE_ACCMODE
 #if (defined(FSC_HAVE_SNK) && defined(FSC_HAVE_ACCMODE))
@@ -698,10 +715,15 @@ void StateMachineAttachWaitSink(void)
 
 		if(isVBUSOverVoltage(VBUS_MDAC_4P20))
 		{
-		    if((VCONNTerm >= CCTypeRdUSB) && (VCONNTerm < CCTypeUndefined))
-		    {
-                        SetStateDebugAccessorySink();
-			} else if(VCONNTerm == CCTypeOpen) {
+                    if((VCONNTerm >= CCTypeRdUSB) && (VCONNTerm < CCTypeUndefined))
+                    {
+                    #ifdef FSC_HAVE_CUSTOM_SRC2
+                        if (VCONNTerm == CCTypeRd1p5 &&  support_smart_holder)
+                            SetStateEmarkCheck();
+                        else
+                    #endif
+                            SetStateDebugAccessorySink();
+                    } else if (VCONNTerm == CCTypeOpen) {
 #ifdef FSC_HAVE_DRP
 				if ((PortType == USBTypeC_DRP) && blnSrcPreferred)
 					SetStateTrySource();
@@ -710,7 +732,7 @@ void StateMachineAttachWaitSink(void)
 				{
 					SetStateAttachedSink();
 				}
-		    }
+			}
 		}
 	}
 }
@@ -1201,6 +1223,48 @@ void StateMachineDebugAccessorySink(void)
     Registers.Measure.MDAC = VBUS_MDAC_3P36;
     DeviceWrite(regMeasure, 1, &Registers.Measure.byte);
 }
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#define HUAWEI_CABLE_RETRIES 10
+void StateMachineEmarkerCheck(void)
+{
+
+	if (!isVBUSOverVoltage(VBUS_MDAC_3P36))
+	{
+		SetStateDelayUnattached();
+	}
+	FSC_PRINT("FUSB %s huawei_emarker_detected_ = %d, huawei_emarker_tries_ = %d\n", __func__, huawei_emarker_detected_, huawei_emarker_tries_);
+	FSC_PRINT("FUSB %s ExpectingVdmResponse = %d, StateTimer.expired = %d\n", __func__, ExpectingVdmResponse, StateTimer.expired);
+
+	/* 5. polling to wait sop' message */
+	if ((huawei_emarker_detected_ == FALSE)
+		&& (huawei_emarker_tries_ < HUAWEI_CABLE_RETRIES)
+		&& (ExpectingVdmResponse == FALSE)
+		&& (StateTimer.expired == TRUE))
+	{
+		if(Registers.Control.AUTO_RETRY == 0)
+		{
+			Registers.Control.AUTO_RETRY = 1;
+			DeviceWrite(regControl3, 1, &Registers.Control.byte[3]);
+		}
+		huawei_emarker_tries_++;
+		requestDiscoverIdentity(SOP_TYPE_SOP1);
+		platform_start_timer(&StateTimer, tCableResetPoll);
+	}
+#ifdef FSC_INTERRUPT_TRIGGERED
+	else if(huawei_emarker_detected_ == TRUE
+		|| (huawei_emarker_tries_ >= HUAWEI_CABLE_RETRIES
+		&& ExpectingVdmResponse == FALSE))
+	{
+		huawei_emarker_tries_ = 0;
+		g_Idle = TRUE;
+		platform_enable_timer(FALSE);
+		USBPDDisable(TRUE);
+	}
+#endif
+	Registers.Measure.MDAC = VBUS_MDAC_3P36;
+	DeviceWrite(regMeasure, 1, &Registers.Measure.byte);
+}
+#endif
 #endif /* (defined(FSC_HAVE_SNK)*/
 
 #ifdef FSC_DTS
@@ -1539,6 +1603,41 @@ void SetStateDebugAccessorySink(void)
     }
     platform_set_timer(&StateTimer, tOrientedDebug);
 }
+#ifdef FSC_HAVE_CUSTOM_SRC2
+void SetStateEmarkCheck(void)
+{
+	g_Idle = FALSE;
+	loopCounter = 0;
+	ConnState = EmarkerCheck;
+	setStateSink();
+	updateVCONNSink();
+	Registers.Measure.MDAC = VBUS_MDAC_3P36;
+	DeviceWrite(regMeasure, 1, &Registers.Measure.byte);
+	/* Huawei - Illegal 22k/22k */
+	if(VCONNTerm == CCTypeRd1p5 && DecodeCCTerminationSink() == CCTypeRd1p5)
+	{
+		FSC_PRINT("FUSB %s: Rp 1.5A\n", __func__);
+		huawei_emarker_detected_ = FALSE;
+                ExpectingVdmResponse = FALSE;
+		/* treat cc1 as cc */
+		blnCCPinIsCC2 = TRUE;
+		blnCCPinIsCC1 = FALSE;
+		Registers.Switches.MEAS_CC2 = 1;
+		Registers.Switches.MEAS_CC1 = 0;
+		DeviceWrite(regSwitches0, 1, &Registers.Switches.byte[0]);
+		USBPDEnable(TRUE, SINK);
+		PolicySinkStartup();
+		platform_cancel_hard_reset();
+		PolicyState = peDisabled;
+		/* Enable SOP' DiscoverIdentity message to emark */
+                Registers.Control.ENSOP1 = 1;
+                DeviceWrite(regControl1, 1, &Registers.Control.byte[1]);
+		/* send cable reset to reset msg_id */
+		ProtocolSendCableReset();
+		platform_start_timer(&StateTimer, tCableResetPoll);
+	}
+}
+#endif
 #endif // FSC_HAVE_SNK
 
 #ifdef FSC_HAVE_SRC
@@ -1680,6 +1779,7 @@ void SetStateAttachedSink(void)
 #ifdef FSC_HAVE_DRP
 void RoleSwapToAttachedSink(void)
 {
+    struct fusb30x_chip* chip = fusb30x_GetChip();
     FSC_PRINT("FUSB %s\n", __func__);
     ConnState = AttachedSink;                                       // Set the state machine variable to Attached.Sink
     sourceOrSink = SINK;
@@ -1709,6 +1809,10 @@ void RoleSwapToAttachedSink(void)
     platform_set_timer(&PDDebounceTimer, tPDDebounce);                                // Set the debounce timer to tPDDebounceMin for detecting changes in advertised current
     platform_set_timer(&CCDebounceTimer, tCCDebounce);                                     // Disable the 2nd level debounce timer, not used in this state
     platform_set_timer(&PDFilterTimer, T_TIMER_DISABLE);  // Disable PD filter timer
+    if(chip->dual_role)
+    {
+        dual_role_instance_changed(chip->dual_role);
+    }
 #ifdef FSC_DEBUG
     WriteStateLog(&TypeCStateLog, ConnState,
                 platform_get_system_time(),
@@ -1720,6 +1824,7 @@ void RoleSwapToAttachedSink(void)
 #ifdef FSC_HAVE_DRP
 void RoleSwapToAttachedSource(void)
 {
+    struct fusb30x_chip* chip = fusb30x_GetChip();
     FSC_PRINT("FUSB %s\n", __func__);
     Registers.Measure.MEAS_VBUS = 0;
     DeviceWrite(regMeasure, 1, &Registers.Measure.byte);
@@ -1747,6 +1852,10 @@ void RoleSwapToAttachedSource(void)
     platform_set_timer(&PDDebounceTimer, tPDDebounce);                                // Set the debounce timer to tPDDebounceMin for detecting a detach
     platform_set_timer(&CCDebounceTimer, tCCDebounce);                                     // Disable the 2nd level debouncing, not needed in this state                                      // Disable the toggle timer, not used in this state
     platform_set_timer(&PDFilterTimer, T_TIMER_DISABLE);  // Disable PD filter timer
+    if(chip->dual_role)
+    {
+        dual_role_instance_changed(chip->dual_role);
+    }
 #ifdef FSC_DEBUG
     WriteStateLog(&TypeCStateLog, ConnState,
                 platform_get_system_time(),
@@ -2307,14 +2416,11 @@ void ConfigurePortType(FSC_U8 Control)
         if (Control & 0x04)
         {
             audioAccSupport = TRUE;
-            Registers.Control4.TOG_USRC_EXIT = 1;
         }
         else
         {
             audioAccSupport = FALSE;
-            Registers.Control4.TOG_USRC_EXIT = 0;
         }
-        DeviceWrite(regControl4, 1, &Registers.Control4.byte);
         setUnattached = TRUE;
     }
 #endif // FSC_HAVE_ACCMODE

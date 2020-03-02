@@ -912,6 +912,10 @@ static IMG_RESULT talmmu_ProcessMemoryRegion(
         }
 
         /* If we don't have a page table structure covering this part of the region then create one. */
+        if (ui32PageTableNo >= psDevMemHeap->ui32NoOfPageTables)
+        {
+            return IMG_ERROR_INVALID_PARAMETERS;
+        }
         if (psDevMemHeap->pasPageTable[ui32PageTableNo] == IMG_NULL)
         {
             psDevMemHeap->pasPageTable[ui32PageTableNo] = IMG_MALLOC(sizeof(*psDevMemHeap->pasPageTable[ui32PageTableNo]));

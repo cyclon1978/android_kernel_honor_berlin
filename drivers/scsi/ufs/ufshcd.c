@@ -302,7 +302,7 @@ static void ufshcd_print_host_regs(struct ufs_hba *hba)
 	ufshcd_print_uic_err_hist(hba, &hba->ufs_stats.tl_err, "tl_err");
 	ufshcd_print_uic_err_hist(hba, &hba->ufs_stats.dme_err, "dme_err");
 }
-
+#ifdef CONFIG_HISI_DEBUG_FS
 static
 void ufshcd_print_trs(struct ufs_hba *hba, unsigned long bitmap, bool pr_prdt)
 {
@@ -363,7 +363,20 @@ static void ufshcd_print_tmrs(struct ufs_hba *hba, unsigned long bitmap)
 				sizeof(struct utp_task_req_desc));
 	}
 }
+#else
+static
+void ufshcd_print_trs(struct ufs_hba *hba, unsigned long bitmap, bool pr_prdt)
+{
+	        return;
 
+}
+
+static void ufshcd_print_tmrs(struct ufs_hba *hba, unsigned long bitmap)
+{
+	        return;
+
+}
+#endif
 static void ufshcd_print_host_state(struct ufs_hba *hba)
 {
 	dev_err(hba->dev, "UFS Host state=%d\n", hba->ufshcd_state);
