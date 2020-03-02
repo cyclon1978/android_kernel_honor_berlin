@@ -46,7 +46,7 @@
 #ifdef CONFIG_HUAWEI_BASTET_COMM
 #define BST_ACORE_CORE_MSG_TYPE_DSPP    0
 #endif
-
+#define BST_MAX_INDICATE_PACKET_LEN  (5000)
 dev_t bastet_dev;
 struct cdev bastet_cdev;
 struct class *bastet_class;
@@ -126,6 +126,10 @@ int post_indicate_packet(bst_ind_type type, void *info, unsigned int len)
 		return -ENOENT;
 	}
 
+	if (len > BST_MAX_INDICATE_PACKET_LEN) {
+		BASTET_LOGE("len is too long");
+		return -ENOENT;
+	}
 	pkt = kmalloc(sizeof(struct data_packet) + len, GFP_ATOMIC);
 	if (NULL == pkt) {
 		BASTET_LOGE("failed to kmalloc");
@@ -226,11 +230,9 @@ static long bastet_ioctl(struct file *flip, unsigned int cmd, unsigned long arg)
 		break;
 	}
 	case BST_IOC_APPLY_LOCAL_PORT: {
-		u16 local_port;
+		u16 local_port = 0;
 
 		rc = bind_local_ports(&local_port);
-		if (rc < 0)
-			break;
 
 		if (copy_to_user(argp, &local_port, sizeof(local_port)))
 			rc = -EFAULT;

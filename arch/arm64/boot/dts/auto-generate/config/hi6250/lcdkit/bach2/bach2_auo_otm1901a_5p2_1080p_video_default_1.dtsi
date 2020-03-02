@@ -214,6 +214,7 @@
 		hw,lcdkit-id0-gpio = <15>;
 		hw,lcdkit-id1-gpio = <24>;
 		hw,lcdkit-reset-gpio = <20>;
+		hw,lcdkit-tp-reset-gpio = <145>;
 		hw,lcdkit-te-gpio = <21>;
 		hw,lcdkit-vsp-gpio = <40>;
 		hw,lcdkit-vsn-gpio = <67>;

@@ -1680,6 +1680,10 @@ static void inputhub_process_additional_info_report(const pkt_header_t* head)
 
 	addi_info = (pkt_additional_info_req_t*)head;
         timestamp = getTimestamp();
+        if (head->tag >= TAG_SENSOR_END) {
+            hwlog_err("%s head->tag = %d\n", __func__, head->tag);
+            return;
+        }
         if (addi_info->serial == 1) {//create a begin event
             event.type = SENSORHUB_TYPE_ADDITIONAL_INFO;
             event.serial = 0;

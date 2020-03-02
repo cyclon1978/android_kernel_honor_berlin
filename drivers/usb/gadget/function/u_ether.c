@@ -1149,9 +1149,6 @@ struct eth_dev *gether_setup_name(struct usb_gadget *g,
 		free_netdev(net);
 		dev = ERR_PTR(status);
 	} else {
-		INFO(dev, "MAC %pM\n", net->dev_addr);
-		INFO(dev, "HOST MAC %pM\n", dev->host_mac);
-
 		/*
 		 * two kinds of host-initiated state changes:
 		 *  - iff DATA transfer is active, carrier is "on"
@@ -1224,8 +1221,6 @@ int gether_register_netdev(struct net_device *net)
 		dev_dbg(&g->dev, "register_netdev failed, %d\n", status);
 		return status;
 	} else {
-		INFO(dev, "HOST MAC %pM\n", dev->host_mac);
-
 		/* two kinds of host-initiated state changes:
 		 *  - iff DATA transfer is active, carrier is "on"
 		 *  - tx queueing enabled if open *and* carrier is "on"
@@ -1239,8 +1234,6 @@ int gether_register_netdev(struct net_device *net)
 	rtnl_unlock();
 	if (status)
 		pr_warn("cannot set self ethernet address: %d\n", status);
-	else
-		INFO(dev, "MAC %pM\n", dev->dev_mac);
 
 	return status;
 }

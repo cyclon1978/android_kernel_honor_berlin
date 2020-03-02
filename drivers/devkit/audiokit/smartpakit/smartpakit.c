@@ -1099,6 +1099,32 @@ err_out:
 	return ret;
 }
 
+static void smartpakit_simple_pa_power_off(struct platform_device *pdev)
+{
+	smartpakit_priv_t *pakit_priv = NULL;
+	smartpakit_switch_node_t *ctl = NULL;
+	int i = 0;
+
+	if (NULL == pdev) {
+		hwlog_err("%s: invalid argument!!!\n", __func__);
+		return;
+	}
+
+	pakit_priv = (smartpakit_priv_t *)platform_get_drvdata(pdev);
+	if ((NULL == pakit_priv)||(NULL == pakit_priv->switch_ctl)||(pakit_priv->algo_in != SMARTPAKIT_ALGO_IN_SIMPLE)) {
+		hwlog_err("%s: pakit_priv invalid argument!!!\n", __func__);
+		return;
+	}
+	ctl = pakit_priv->switch_ctl;
+
+	for (i = 0; i < (int)pakit_priv->switch_num; i++) {
+		// set gpio default state
+		gpio_direction_output((unsigned)ctl[i].gpio, ctl[i].state);
+		mdelay(1);// For AW8737 shutdown sequence
+	}
+	return;
+}
+
 static int smartpakit_parse_dt_info(struct platform_device *pdev, smartpakit_priv_t *pakit_priv)
 {
 	const char *soc_platform_str = "soc_platform";
@@ -1345,7 +1371,10 @@ static int smartpakit_remove(struct platform_device *pdev)
 	misc_deregister(&smartpakit_ctrl_miscdev);
 	return 0;
 }
-
+static void smartpakit_shutdown(struct platform_device *pdev)
+{
+	smartpakit_simple_pa_power_off(pdev);
+}
 /*lint -e528*/
 static const struct of_device_id smartpakit_match[] = {
 	{ .compatible = "huawei,smartpakit", },
@@ -1361,6 +1390,7 @@ static struct platform_driver smartpakit_driver = {
 	},
 	.probe  = smartpakit_probe,
 	.remove = smartpakit_remove,
+	.shutdown = smartpakit_shutdown,
 };
 
 static int __init smartpakit_init(void)
@@ -1386,7 +1416,7 @@ static void __exit smartpakit_exit(void)
 }
 /*lint +e438 +e838*/
 
-module_init(smartpakit_init);
+late_initcall(smartpakit_init);
 module_exit(smartpakit_exit);
 
 /*lint -e753*/

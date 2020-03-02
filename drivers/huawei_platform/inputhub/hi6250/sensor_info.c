@@ -243,6 +243,7 @@ static int gsensor_offset[15];	/*g-sensor calibrate data*/
 static int gyro_sensor_offset[15];
 static int ps_sensor_offset[3];
 static int ps_switch_mode = 0;
+int ps_support_mode = 0;
 struct ps_external_ir_param ps_external_ir_param = {
        .external_ir = 0,
        .internal_ir_min_proximity_value = 750,
@@ -255,6 +256,9 @@ struct ps_external_ir_param ps_external_ir_param = {
        .external_ir_threshold_value = 60,
        .external_ir_calibrate_noise = 30,
        .external_ir_enable_gpio = 67,
+       .external_ir_powermode = 0,
+       .external_ir_pwindows_ratio = 1000,
+       .external_ir_pwave_ratio = 1000,
 };
 struct ps_extend_platform_data ps_extend_platform_data = {
 	.external_ir_mode_flag = 0,
@@ -275,6 +279,9 @@ struct ps_extend_platform_data ps_extend_platform_data = {
 	.threshold_value = 20,
 	.calibrate_noise = 30,
 };
+#define PS_EXT_IR_VBUS  "sensor-external-ir"
+
+struct regulator *ps_external_ir_vdd = NULL;
 static uint16_t als_offset[6];
 static uint8_t hp_offset[24];
 static uint8_t cap_prox_calibrate_data[CAP_PROX_CALIDATA_NV_SIZE]={0};
@@ -4895,19 +4902,25 @@ static ssize_t attr_ps_switch_mode_store(struct device *dev,
 	if(ps_external_ir_param.external_ir == 1) {
 		if (strict_strtoul(buf, 10, &val))
 			return -EINVAL;
-		if((val < 0)||(val > 1)){
+		if((val < PS_MODE_MIN)||(val > PS_MODE_MAX)){
 			hwlog_err("set ps switch mode val invalid,val=%lu\n", val);
 			return count;
 		}
-		if(val == 1){
+		if(val == MID_PS){
 			ps_extend_platform_data.external_ir_mode_flag  = 1;
 			ps_extend_platform_data.min_proximity_value = ps_external_ir_param.external_ir_min_proximity_value;
 			ps_extend_platform_data.pwindows_value = ps_external_ir_param.external_ir_pwindows_value;
 			ps_extend_platform_data.pwave_value = ps_external_ir_param.external_ir_pwave_value;
 			ps_extend_platform_data.threshold_value  = ps_external_ir_param.external_ir_threshold_value;
 			ps_extend_platform_data.calibrate_noise  = ps_external_ir_param.external_ir_calibrate_noise;
-		}
-		else{
+		} else if (val == NEAR_PS){
+			ps_extend_platform_data.external_ir_mode_flag  = 1;
+			ps_extend_platform_data.min_proximity_value = ps_external_ir_param.external_ir_min_proximity_value;
+			ps_extend_platform_data.pwindows_value = ps_external_ir_param.external_ir_pwindows_value *ps_external_ir_param.external_ir_pwindows_ratio/PS_RATIO;
+			ps_extend_platform_data.pwave_value = ps_external_ir_param.external_ir_pwave_value *ps_external_ir_param.external_ir_pwave_ratio/PS_RATIO;
+			ps_extend_platform_data.threshold_value  = ps_external_ir_param.external_ir_threshold_value;
+			ps_extend_platform_data.calibrate_noise  = ps_external_ir_param.external_ir_calibrate_noise;
+		} else {
 			ps_extend_platform_data.external_ir_mode_flag  = 0;
 			ps_extend_platform_data.min_proximity_value = ps_external_ir_param.internal_ir_min_proximity_value;
 			ps_extend_platform_data.pwindows_value = ps_external_ir_param.internal_ir_pwindows_value;
@@ -4941,12 +4954,38 @@ static ssize_t attr_ps_switch_mode_store(struct device *dev,
 		else
 		{
 			ps_switch_mode=val;
-			if(val == 1){
-				gpio_direction_output(ps_external_ir_param.external_ir_enable_gpio, 1);
+			if(ps_external_ir_param.external_ir_powermode == 0) {
+				if((val == MID_PS)||(val == NEAR_PS)) {
+					gpio_direction_output(ps_external_ir_param.external_ir_enable_gpio, 1);
+				}
+				else {
+					gpio_direction_output(ps_external_ir_param.external_ir_enable_gpio, 0);
+				}
 			}
-			else{
-				gpio_direction_output(ps_external_ir_param.external_ir_enable_gpio, 0);
+			else {
+				if((val == MID_PS)||(val == NEAR_PS)) {
+					if (!regulator_is_enabled(ps_external_ir_vdd)) {
+						hwlog_info("ps switch enable vdd\n");
+						ret = regulator_enable(ps_external_ir_vdd);
+						if (ret < 0)
+							hwlog_err("failed to enable regulator ps_external_ir_vdd\n");
+					} else {
+						hwlog_info("ps IR power has enable already, no need enable again\n");
+					}
+				}
+				else {
+					if (regulator_is_enabled(ps_external_ir_vdd)) {
+						hwlog_info("ps switch disable vdd\n");
+						ret = regulator_disable(ps_external_ir_vdd);
+						if (ret< 0) {
+							hwlog_err("failed to disable regulator ps_external_ir_vdd\n");
+						}
+					} else {
+						hwlog_info("ps IR power has disable already, no need disable again\n");
+					}
+				}
 			}
+
 			hwlog_info("ps switch mode  success, data len=%d\n", pkg_mcu.data_length);
 		}
 	}else {
@@ -4956,6 +4995,16 @@ static ssize_t attr_ps_switch_mode_store(struct device *dev,
 }
 static DEVICE_ATTR(ps_switch_mode, 0664, attr_ps_switch_mode_show,
 		   attr_ps_switch_mode_store);
+
+static ssize_t attr_ps_support_mode_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	int val = ps_support_mode;
+	return snprintf(buf, PAGE_SIZE, "%d\n",val);
+}
+
+static DEVICE_ATTR(ps_support_mode, 0664, attr_ps_support_mode_show,
+		   NULL);
 
 static ssize_t attr_als_calibrate_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
@@ -7353,6 +7402,7 @@ static struct attribute *sensor_attributes[] = {
 	&dev_attr_ps_enable.attr,
 	&dev_attr_ps_setdelay.attr,
 	&dev_attr_ps_switch_mode.attr,
+	&dev_attr_ps_support_mode.attr,
 	&dev_attr_pdr_enable.attr,
 	&dev_attr_pdr_setdelay.attr,
 	&dev_attr_orientation_enable.attr,
@@ -7806,6 +7856,10 @@ static int sensorhub_io_driver_probe(struct platform_device *pdev)
 	if (IS_ERR(sensorhub_vddio)) {
 		hwlog_err("%s: regulator_get fail!\n", __func__);
 		return -EINVAL;
+	}
+	ps_external_ir_vdd = devm_regulator_get(&pdev->dev, PS_EXT_IR_VBUS);
+	if (IS_ERR(ps_external_ir_vdd)) {
+		hwlog_err("%s: ps_external_ir_vdd regulator_get fail!\n", __func__);
 	}
 
 	ret = regulator_enable(sensorhub_vddio);

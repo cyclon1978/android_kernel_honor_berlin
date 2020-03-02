@@ -44,6 +44,12 @@
 #define TMD2745_PARA_SIZE (10)
 #define RPR531_PARA_SIZE (16)
 
+#define MID_PS (1)
+#define NEAR_PS (2)
+#define PS_RATIO (1000)
+#define PS_MODE_MAX (2)
+#define PS_MODE_MIN (0)
+
 #define DEFAULT_TPLCD (0)
 #define LG_TPLCD (1)
 #define JDI_TPLCD (2)
@@ -415,6 +421,9 @@ struct ps_external_ir_param {
 	int external_ir_threshold_value;
 	int external_ir_calibrate_noise;
 	int external_ir_enable_gpio;
+	int external_ir_powermode;
+	int external_ir_pwindows_ratio;
+	int external_ir_pwave_ratio;
 };
 
 struct airpress_platform_data {
@@ -462,6 +471,7 @@ struct semteck_sar_data {
 	uint32_t init_reg_val[17];
 	uint8_t ph;
 	uint16_t calibrate_thred[4];
+	uint16_t offset_check;
 };
 union sar_data {
 	struct cypress_sar_data cypress_data;

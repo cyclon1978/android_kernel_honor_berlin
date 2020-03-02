@@ -1088,10 +1088,13 @@ static ssize_t disksize_store(struct device *dev,
 	if (!disksize)
 		return -EINVAL;
 
+	down_write(&zram->init_lock);
 	disksize = PAGE_ALIGN(disksize);
 	meta = zram_meta_alloc(zram->pool_type,zram->disk->disk_name, disksize);
-	if (!meta)
-		return -ENOMEM;
+	if (!meta) {
+		err = -ENOMEM;
+		goto out_err;
+	}
 
 	comp = zcomp_create(zram->compressor, zram->max_comp_streams);
 	if (IS_ERR(comp)) {
@@ -1101,7 +1104,6 @@ static ssize_t disksize_store(struct device *dev,
 		goto out_free_meta;
 	}
 
-	down_write(&zram->init_lock);
 	if (init_done(zram)) {
 		pr_info("Cannot change disksize for initialized device\n");
 		err = -EBUSY;
@@ -1126,10 +1128,11 @@ static ssize_t disksize_store(struct device *dev,
 	return len;
 
 out_destroy_comp:
-	up_write(&zram->init_lock);
 	zcomp_destroy(comp);
 out_free_meta:
 	zram_meta_free(meta, disksize);
+out_err:
+	up_write(&zram->init_lock);
 	return err;
 }
 

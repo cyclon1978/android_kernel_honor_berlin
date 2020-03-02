@@ -976,7 +976,8 @@ static ssize_t log_tag_write(struct file *file, const char __user *buf,
 	for (t = &__start_hwlog_tag; t < &__stop_hwlog_tag; t++) {
 		if (NULL != t->name
 		    && strncmp(name, t->name, MAX_NAME_LEN) == 0) {
-			t->level = val;
+		        /*_ro_after_init do not allow modify text segment*/
+		        /*t->level = val;*/
 			pr_debug("%s set to 0X%0*X\n", name, LEVEL_LEN, val);
 			find_tag_num++;
 		}

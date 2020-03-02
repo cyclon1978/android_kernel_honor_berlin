@@ -72,6 +72,8 @@ static u32 scp_error_flag = 0;
 #endif
 static unsigned int single_phase_buck;
 
+static int weak_source_recovery_en = FALSE;
+
 static int hi6523_get_vbus_mv(unsigned int *vbus_mv);
 static int hi6523_get_charge_state(unsigned int *state);
 static int hi6523_set_charge_enable(int enable);
@@ -3087,26 +3089,54 @@ static int hi6523_fcp_master_reset(void)
 ***************************************************************************/
 static int hi6523_fcp_adapter_reset(void)
 {
-	int ret = 0;
+	u8 val = 0;
+	int ret = 0, i = 0;
+	int output_vol = 0;
+
 	ret |= hi6523_set_vbus_vset(VBUS_VSET_5V);
-	ret |=
-	    hi6523_write_byte(CHG_FCP_CTRL_REG,
-			      CHG_FCP_EN_MSK | CHG_FCP_MSTR_RST_MSK);
-	if (ret) {
-		SCHARGER_ERR("%s : send rst cmd failed \n ", __func__);
+	ret |= hi6523_fcp_adapter_reg_read(&output_vol, CHG_FCP_SLAVE_REG_DISCRETE_OUT_V(0));
+	if (ret){
+		SCHARGER_ERR("%s get output_vol error.\n", __func__);
 		return ret;
 	}
 
+
+	/*retry if reset fail*/
+	for (i = 0; i < FCP_RESET_RETRY_TIME; i++) {
+		ret |= hi6523_fcp_adapter_reg_write(output_vol, CHG_FCP_SLAVE_VOUT_CONFIG);
+		ret |= hi6523_fcp_adapter_reg_read(&val, CHG_FCP_SLAVE_VOUT_CONFIG);
+		SCHARGER_INF("%s: vout config reg[0x2c] = %u.\n", __func__, val);
+		if (ret || val != output_vol) {
+			SCHARGER_ERR("%s: set vout config err, reg[0x2c] = %u.\n", __func__, val);
+			continue;
+		}
+
+		ret |= hi6523_fcp_adapter_reg_write(CHG_FCP_SLAVE_SET_VOUT, CHG_FCP_SLAVE_OUTPUT_CONTROL);
+		if (ret) {
+			SCHARGER_ERR("%s: enable adapter output voltage failed.\n", __func__);
+			continue;
+		}
+		SCHARGER_INF("%s: enable adapter output voltage succ, i = %d.\n", __func__, i);
+		break;
+	}
+
+	ret |= hi6523_write_byte(CHG_FCP_CTRL_REG, CHG_FCP_EN_MSK | CHG_FCP_MSTR_RST_MSK);
+	if (ret) {
+		SCHARGER_ERR("%s: send rst cmd failed.\n ", __func__);
+		return ret;
+	}
+	/*after reset, v300 need 17ms*/
+	msleep(25);
 	ret |= hi6523_fcp_adapter_vol_check(FCP_ADAPTER_RST_VOL);
 	if (ret) {
 		ret |= hi6523_write_byte(CHG_FCP_CTRL_REG, 0);	//clear fcp_en and fcp_master_rst
-		SCHARGER_ERR("%s : adc check adapter output voltage failed \n ",
-			     __func__);
+		SCHARGER_ERR("%s: adc check adapter output voltage failed.\n ", __func__);
 		return ret;
 	}
 
 	ret |= hi6523_write_byte(CHG_FCP_CTRL_REG, 0);	//clear fcp_en and fcp_master_rst
 	ret |= hi6523_config_opt_param(VBUS_VSET_5V);
+	SCHARGER_INF("%s: fcp adapter output voltage reset succ.\n", __func__);
 	return ret;
 }
 
@@ -3931,6 +3961,8 @@ static void hi6523_plugout_check_work(struct work_struct *work)
 	int ret;
 	unsigned char rboost_irq_reg = 0;
 	struct hi6523_device_info *di = g_hi6523_dev;
+	static int vbatt_full=0;
+	unsigned int status=0;
 
 	if (NULL == di)
 		return;
@@ -3977,6 +4009,29 @@ static void hi6523_plugout_check_work(struct work_struct *work)
 			}
 		}
 	}
+
+	if(TRUE == weak_source_recovery_en){
+		ret = hi6523_get_charge_state(&status);
+		if(ret){
+			SCHARGER_ERR("get hi6253 charge status fail\n");
+		}else{
+			if(status & CHAGRE_STATE_CHRG_DONE) {
+				vbatt_full =  hisi_battery_voltage();
+			}
+
+			if(0 != vbatt_full){
+				if((status & CHAGRE_STATE_NOT_PG) && (MAX_RBOOST_CNT <= g_rboost_cnt) ){
+					if(vbatt_full > (vbatt_mv + RECHARGE_BATT_VOLT_DECREASE)){
+						SCHARGER_INF("weak_source_recovery recharge begin,vbat = %d,vbat_full=%d,rboost_cnt=%d\n",vbatt_mv,vbatt_full,g_rboost_cnt);
+						hi6523_set_charger_hiz(FALSE);
+						g_rboost_cnt = 0;
+						vbatt_full = 0;
+					}
+				}
+			}
+		}
+	}
+
 	queue_delayed_work(system_power_efficient_wq, &di->plugout_check_work,
 			      msecs_to_jiffies(plugout_check_delay_ms));
 }
@@ -4184,6 +4239,13 @@ static void parse_dts(struct device_node *np, struct hi6523_device_info *di)
 		di->param_dts.dpm_en = DPM_DISABLE;
 	}
 	SCHARGER_INF("prase_dts dpm_en = %d\n", di->param_dts.dpm_en);
+
+	ret =of_property_read_u32(np, "weak_source_recovery_en",(u32 *)&weak_source_recovery_en);
+	if (ret) {
+		SCHARGER_INF("get weak_source_recovery_en failed!\n");
+		weak_source_recovery_en = FALSE;
+	}
+	SCHARGER_INF("prase_dts weak_source_recovery_en = %d\n",weak_source_recovery_en);
 
 	//scharger water check
 	dm_array_len = of_property_count_strings(np, "dm_water_vol");

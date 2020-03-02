@@ -60,6 +60,8 @@ struct _mmtuner_cntxt g_cnt;	/* mm_tuner driver context */
 
 static struct _tsif_cntxt	g_tscnt;	/* TS I/F context */
 
+static size_t g_ts_pktbuf_size = 0;
+
 struct devone_data;
 
 /** @brief TS packet size.
@@ -229,19 +231,13 @@ static int tuner_pm_suspend(struct device *dev)
  ******************************************************************************/
 static int tuner_pm_resume(struct device *dev)
 {
-	int ret ;
+	int ret = 0;
 
 	if(dev == NULL){
 		pr_err("tuner pm resume.\n");
 	}
 
-	/* TODO: implement the resume scheme of the tuner device */
-	ret = tuner_drv_hw_tsif_set_tpm();
-	if (ret) {
-		pr_err("write TPM bits failed.\n");
-		return ret;
-	}
-	
+	/* TODO: implement the resume scheme of the tuner device */	
 	return ret;
 }
 
@@ -1071,18 +1067,25 @@ static int tuner_drv_tsif_start(void)
 		return ret;
 	}
 
-	if (g_tscnt.pktbuf) {
-		kfree(g_tscnt.pktbuf);
-		g_tscnt.pktbuf = NULL;
-	}
-
 	buffer_size = g_tscnt.ts_pktbuf_size;
 
-	g_tscnt.pktbuf = (uint8_t *)kmalloc(buffer_size, GFP_KERNEL );
+	if(buffer_size != g_ts_pktbuf_size){
 
-	if (g_tscnt.pktbuf == NULL) {
-		pr_err("memory allocation failed.\n");
-		return -ENOMEM;
+		if(g_tscnt.pktbuf != NULL){
+			kfree(g_tscnt.pktbuf);
+			g_tscnt.pktbuf = NULL;
+			g_ts_pktbuf_size = 0 ;
+		}
+		
+		g_tscnt.pktbuf = (uint8_t *)kmalloc(buffer_size, GFP_KERNEL );
+
+		if (g_tscnt.pktbuf == NULL) {
+			pr_err("memory allocation failed, memory size: %d\n",buffer_size);
+			return -ENOMEM;
+		}
+
+		g_ts_pktbuf_size = buffer_size ;
+		
 	}
 
 	memset(g_tscnt.pktbuf, 0, g_tscnt.ts_pktbuf_size);
@@ -1092,7 +1095,7 @@ static int tuner_drv_tsif_start(void)
 	ret = tuner_drv_hw_tsif_config(&g_tscnt);
 	if (ret) {
 		pr_err("tuner_drv_hw_tsif_config() failed.\n");
-		kfree(g_tscnt.pktbuf);
+		memset(g_tscnt.pktbuf, 0, g_tscnt.ts_pktbuf_size);
 		return ret;
 	}
 
@@ -1102,7 +1105,7 @@ static int tuner_drv_tsif_start(void)
 	ret = tuner_drv_hw_tsif_sync_pkt();
 	if (ret) {
 		pr_err("tuner_drv_hw_tsif_sync_pkt failed.\n");
-		kfree(g_tscnt.pktbuf);
+		memset(g_tscnt.pktbuf, 0, g_tscnt.ts_pktbuf_size);
 		return ret;
 	}
 
@@ -1180,10 +1183,9 @@ static int tuner_drv_tsif_stop(void)
 	g_tscnt.ts_rx_size = 0;
 	g_tscnt.ts_pktbuf_size = 0;
 
-	kfree(g_tscnt.pktbuf);
+	memset(g_tscnt.pktbuf, 0, g_tscnt.ts_pktbuf_size);
 	kfree(g_tscnt.tsif);
 
-	g_tscnt.pktbuf = NULL;
 	g_tscnt.tsif = NULL;
 
 	return ret;
@@ -1381,6 +1383,20 @@ int tuner_drv_start(void)
 	g_tscnt.pwr = g_tscnt.prd = 0;
 	g_tscnt.ovf = 0;
 
+	g_ts_pktbuf_size = TUNER_TSREAD_BUFF_DEF_SIZE ;
+
+	if(g_ts_pktbuf_size != 0){
+		
+		g_tscnt.pktbuf = (uint8_t *)kmalloc(g_ts_pktbuf_size, GFP_KERNEL );
+
+		if (g_tscnt.pktbuf == NULL) {
+			g_ts_pktbuf_size = 0 ;
+			pr_err("mmtuner dtv memeory failed.\n");
+		}else
+			pr_err("mmtuner dtv memeory init!\n");
+		
+	}
+
 	wake_up_process(g_tscnt.tsifth_id);
 
 	/* initialize the status flag and the wait-queue for Ts Buffering Thread */
@@ -1414,6 +1430,12 @@ void tuner_drv_end(void)
 	/* execute the unregister scheme of TS I/F */
 	tuner_drv_hw_tsif_unregister();
 
+	if(g_tscnt.pktbuf != NULL){
+		kfree(g_tscnt.pktbuf);
+		g_tscnt.pktbuf = NULL;
+		g_ts_pktbuf_size = 0 ;
+	}
+
 	/* Destroy device */
 	device_destroy(device_class,
 			MKDEV(TUNER_CONFIG_DRV_MAJOR, TUNER_CONFIG_DRV_MINOR));
@@ -1433,6 +1455,8 @@ static int __init tuner_drv_init(void)
 	ret = tuner_drv_hw_i2c_register();
 	if(ret) {
 		pr_err("tuner drv init failed.\n");
+	}else{
+		pr_err("tuner drv init success.\n");
 	}
 
 	return ret ;

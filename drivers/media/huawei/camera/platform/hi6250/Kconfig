@@ -189,6 +189,11 @@ config HUAWEI_CAMERA_USE_IMX219HDN_BACK
     default n
         depends on HUAWEI_CAMERA
 
+config HUAWEI_CAMERA_USE_HI846
+        bool "hi846"
+    default n
+        depends on HUAWEI_CAMERA
+
 config HUAWEI_CAMERA_USE_OV16B10BND
     bool "ov16b10BND"
     default y

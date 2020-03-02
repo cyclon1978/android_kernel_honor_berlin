@@ -39,6 +39,12 @@ static int max77813_read_block(struct max77813_device_info *di, u8 *value,
 	struct i2c_msg msg[2];
 	u8 buf = 0;
 	int ret = 0;
+
+	if(NULL == di){
+		hwlog_err("%s:NULL POINTER!!\n",__func__);
+		return -1;
+	}
+
 	buf = reg;
 	msg[0].addr = di->client->addr;
 	msg[0].flags = 0;
@@ -77,6 +83,11 @@ static int max77813_write_block(struct max77813_device_info *di, u8 *value, u8 r
 {
 	struct i2c_msg msg[1];
 	int ret = 0;
+
+	if(NULL == di){
+		hwlog_err("%s:NULL POINTER!!\n",__func__);
+		return -1;
+	}
 
 	*value = reg;
 

@@ -33,4 +33,9 @@
 			compatible = "hisilicon,usb-otg-ahbif";
 			reg = <0x0 0xff200000 0x0 0x40000>;
 		};
+
+		huawei_hishow: huawei_hishow{
+			compatible = "huawei,hishow";
+			status = "disable";
+		};
   };

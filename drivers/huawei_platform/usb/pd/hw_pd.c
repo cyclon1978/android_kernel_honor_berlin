@@ -55,7 +55,9 @@
 #include "huawei_platform/dp_aux_switch/dp_aux_switch.h"
 
 #include <linux/fb.h>
-
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+#include <huawei_platform/usb/huawei_hishow.h>
+#endif
 #ifdef CONFIG_CONTEXTHUB_PD
 #define PD_DPM_WAIT_COMBPHY_CONFIGDONE() \
 		wait_for_completion_timeout(&pd_dpm_combphy_configdone_completion, msecs_to_jiffies(11500)); \
@@ -63,6 +65,9 @@
 #endif
 struct pd_dpm_info *g_pd_di = NULL;
 static bool g_pd_cc_orientation = false;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static bool g_pd_smart_holder = false;
+#endif
 static struct class *typec_class = NULL;
 static struct device *typec_dev = NULL;
 static struct mutex dpm_sink_vbus_lock;
@@ -87,6 +92,9 @@ static bool ignore_bc12_event_when_vbuson = false;
 static bool ignore_bc12_event_when_vbusoff = false;
 static enum pd_dpm_cc_voltage_type remote_rp_level = PD_DPM_CC_VOLT_OPEN;
 static struct pd_dpm_ops *g_ops;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static struct cable_vdo_ops *g_cable_vdo_ops = NULL;
+#endif
 static void *g_client;
 #ifdef CONFIG_CONTEXTHUB_PD
 static bool g_last_hpd_status = false;
@@ -95,6 +103,9 @@ static TCPC_MUX_CTRL_TYPE g_combphy_mode = TCPC_NC;
 static int switch_manual_enable = 1;
 static unsigned int abnormal_cc_detection = 0;
 int support_dp = 1;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+int support_smart_holder = 0;
+#endif
 int support_analog_audio = 1;
 static struct console g_con;
 struct mutex typec_state_lock;
@@ -173,6 +184,25 @@ int pd_dpm_ops_register(struct pd_dpm_ops *ops, void *client)
 	}
 	return ret;
 }
+
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+int pd_dpm_cable_vdo_ops_register(struct cable_vdo_ops *ops)
+{
+	int ret = 0;
+	if (ops != NULL)
+	{
+		g_cable_vdo_ops = ops;
+	}
+	else
+	{
+		hwlog_err("cable_vdo_ops ops register fail!\n");
+		ret = -EPERM;
+	}
+	return ret;
+
+}
+#endif
+
 void pd_dpm_hard_reset(void)
 {
 	hwlog_err("%s++!\n", __func__);
@@ -502,6 +532,13 @@ static void pd_dpm_set_cc_orientation(bool cc_orientation)
 	g_pd_cc_orientation = cc_orientation;
 }
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static bool pd_dpm_is_smart_holder(void)
+{
+	return g_pd_smart_holder;
+}
+#endif
+
 void pd_dpm_get_typec_state(int *typec_state)
 {
 	hwlog_info("%s pd_dpm_get_typec_state  = %d\n", __func__, pd_dpm_typec_state);
@@ -534,12 +571,26 @@ static ssize_t pd_dpm_pd_state_show(struct device *dev, struct device_attribute 
 	return scnprintf(buf, PAGE_SIZE, "%s\n", pd_dpm_get_pd_finish_flag()? "0" : "1");
 }
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static ssize_t pd_dpm_smart_holder_show(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	hwlog_info("%s  = %d\n", __func__, pd_dpm_is_smart_holder());
+	return scnprintf(buf, PAGE_SIZE, "%s\n", pd_dpm_is_smart_holder()? "1" : "0");
+}
+#endif
+
 static DEVICE_ATTR(cc_orientation, S_IRUGO, pd_dpm_cc_orientation_show, NULL);
 static DEVICE_ATTR(pd_state, S_IRUGO, pd_dpm_pd_state_show, NULL);
-
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+static DEVICE_ATTR(smart_holder, S_IRUGO, pd_dpm_smart_holder_show, NULL);
+#endif
 static struct attribute *pd_dpm_ctrl_attributes[] = {
 	&dev_attr_cc_orientation.attr,
 	&dev_attr_pd_state.attr,
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	&dev_attr_smart_holder.attr,
+#endif
 	&dev_attr_usb_speed.attr,
 	&dev_attr_usb_event.attr,
 	NULL,
@@ -1245,6 +1296,15 @@ int pd_dpm_handle_pe_event(unsigned long event, void *data)
 
 			case PD_DPM_TYPEC_UNATTACHED:
 				notify_audio = true;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+				if(support_smart_holder){
+					if(g_pd_smart_holder)
+					{
+						hishow_notify_android_uevent(HIVIEW_DEVICE_OFFLINE,HIVIEW_USB_DEVICE);
+					}
+					g_pd_smart_holder = false;
+				}
+#endif
 				event_id = USB_ANA_HS_PLUG_OUT;
 				usb_event = PD_DPM_USB_TYPEC_DETACHED;
 				hwlog_info("%s UNATTACHED\r\n", __func__);
@@ -1265,6 +1325,23 @@ int pd_dpm_handle_pe_event(unsigned long event, void *data)
 				hwlog_info("%s ATTACHED_CUSTOM_SRC\r\n", __func__);
 				typec_complete(COMPLETE_FROM_TYPEC_CHANGE);
 				break;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+			case PD_DPM_TYPEC_ATTACHED_CUSTOM_SRC2:
+				if(support_smart_holder) {
+					usb_event = PD_DPM_USB_TYPEC_DEVICE_ATTACHED;
+					hwlog_info("%s ATTACHED_CUSTOM_SRC2\r\n", __func__);
+					if(g_cable_vdo_ops && g_cable_vdo_ops->is_cust_src2_cable())
+					{
+						if(!g_pd_smart_holder)
+						{
+							hishow_notify_android_uevent(HIVIEW_DEVICE_ONLINE,HIVIEW_USB_DEVICE);
+						}
+						g_pd_smart_holder = true;
+					}
+					typec_complete(COMPLETE_FROM_TYPEC_CHANGE);
+				}
+				break;
+#endif
 			case PD_DPM_TYPEC_ATTACHED_DEBUG:
 				pd_dpm_set_cc_voltage(PD_DPM_CC_VOLT_SNK_DFT);
 				break;
@@ -1394,12 +1471,17 @@ static int pd_dpm_parse_dt(struct pd_dpm_info *info,
 	}
 	hwlog_info("support_dp = %d!\n", support_dp);
 
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	if (of_property_read_u32(np,"support_smart_holder", &support_smart_holder)) {
+			hwlog_err("get support_smart_holder fail!\n");
+	}
+	hwlog_info("support_smart_holder = %d!\n", support_smart_holder);
+#endif
 	if (of_property_read_u32(np, "support_analog_audio", &support_analog_audio)) {
 		hwlog_err("get support_analog_audio fail!\n");
 		support_analog_audio = 1;
 	}
 	hwlog_info("support_analog_audio = %d!\n", support_analog_audio);
-
 	return 0;
 }
 

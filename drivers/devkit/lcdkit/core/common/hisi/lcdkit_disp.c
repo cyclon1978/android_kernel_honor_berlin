@@ -904,11 +904,27 @@ lp_sequence_restart:
             }
             mdelay(lcdkit_info.panel_infos.delay_af_tp_reset);
         }
-
+        if (true == ts_kit_gesture_func)
+        {
+            if (lcdkit_info.panel_infos.tddi_tp_gesture_sequence_flag)
+            {
+            //gesture need sequence
+               gpio_cmds_tx(lcdkit_gpio_rst_gesture_low_cmds, \
+                ARRAY_SIZE(lcdkit_gpio_rst_gesture_low_cmds));
+            }
+        }
         if(lcdkit_info.panel_infos.lcdrst_after_tprst_flag)
         {
             if (lcdkit_info.panel_infos.second_reset)
             {
+                if(true == ts_kit_gesture_func)
+                {
+                    if (lcdkit_info.panel_infos.tddi_tp_gesture_sequence_flag)
+                    {
+                      gpio_cmds_tx(lcdkit_tp_rst_gesture_high_cmds, \
+                       ARRAY_SIZE(lcdkit_tp_rst_gesture_high_cmds));
+                    }
+                }
                 if(lcdkit_info.panel_infos.reset_pull_high_flag == 1)
                 {
                     //the second reset just pull high
@@ -1296,8 +1312,22 @@ static int lcdkit_off(struct platform_device* pdev)
 	        lcdkit_backlight_ic_power_off();
         }
 
-        }else
-        {
+        } else {
+            if (true == ts_kit_gesture_func)
+            {
+                if (lcdkit_info.panel_infos.tddi_tp_gesture_sequence_flag)
+                {
+                    /*notify early suspend*/
+                    lcdkit_notifier_call_chain(LCDKIT_TS_BEFORE_SUSPEND, &data_for_notify_early_suspend);
+                    /*notify suspend*/
+                    lcdkit_notifier_call_chain(LCDKIT_TS_SUSPEND_DEVICE, &data_for_notify_suspend);
+
+                    if(pinfo->bl_ic_ctrl_mode == COMMON_IC_MODE)
+                    {
+                       lcdkit_backlight_ic_power_off();
+                    }
+                }
+            }
             // lcd reset gpio free
             gpio_cmds_tx(lcdkit_gpio_reset_free_cmds, \
                 ARRAY_SIZE(lcdkit_gpio_reset_free_cmds));

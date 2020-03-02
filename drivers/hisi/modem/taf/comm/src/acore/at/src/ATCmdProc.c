@@ -2643,55 +2643,57 @@ VOS_UINT32 At_ProcSimLockPara(
 
 }
 
-
-/* Added by L47619 for AP-Modem Personalisation Project, 2012/04/18, begin */
 /*****************************************************************************
- 函 数 名  : AT_HandleFacAuthPubKeyCmd
- 功能描述  : 处理AT^FACAUTHPUBKEY命令的特殊函数(因为该命令的第一个参数长度超过
+ 函 数 名  : AT_HandleFacAuthPubKeyExCmd
+ 功能描述  : 处理AT^FACAUTHPUBKEYEX命令的特殊函数(因为该命令的第三个参数长度超过
              解析器处理上限，需要进行特殊处理)
  输入参数  : ucIndex --- 用户索引
              pucData --- 输入的字符串
              pusLen --- 字符串长度
  输出参数  : 无
- 返 回 值  : AT_SUCCESS 是^FACAUTHPUBKEY命令,处理完毕
-             AT_FAILURE 不是^FACAUTHPUBKEY命令
+ 返 回 值  : AT_SUCCESS 是^FACAUTHPUBKEYEX命令,处理完毕
+             AT_FAILURE ^FACAUTHPUBKEY命令处理失败
  调用函数  :
  被调函数  :
 
  修改历史      :
-  1.日    期   : 2012年04月18日
-    作    者   : L47619
-    修改内容   : AP-Modem锁网锁卡项目新增函数
-
-  2.日    期   : 2012年9月19日
-    作    者   : l00171473
-    修改内容   : V7R1C50_At_Abort, 保存命令信息, AT打断处理需要使用
-  3.日    期   : 2013年2月25日
-    作    者   : l60609
-    修改内容   : DSDA PHASE III
+  1.日    期   : 2016年05月10日
+    作    者   : z00301431
+    修改内容   : 锁网锁卡安全升级开发新增
 *****************************************************************************/
-VOS_UINT32 AT_HandleFacAuthPubKeyCmd(
+VOS_UINT32 AT_HandleFacAuthPubKeyExCmd(
     VOS_UINT8                           ucIndex,
     VOS_UINT8                          *pucData,
     VOS_UINT16                          usLen
 )
 {
-    VOS_INT8                            cRet;
+    AT_AUTH_PUBKEYEX_CMD_PROC_CTX      *pstAuthPubKeyCtx = VOS_NULL_PTR;
+    VOS_UINT8                          *pucDataPara = VOS_NULL_PTR;
+    AT_PARSE_CMD_NAME_TYPE_STRU         stAtCmdName;
+    VOS_UINT32                          ulResult;
+    VOS_UINT32                          ulFirstParaVal;
+    VOS_UINT32                          ulSecParaVal;
+    VOS_UINT32                          ulTimerName;
+    VOS_UINT32                          ulTempIndex;
     VOS_UINT16                          usCmdlen;
     VOS_UINT16                          usPos;
-    VOS_UINT8                          *pucDataPara;
     VOS_UINT16                          usLoop;
     VOS_UINT16                          usCommaCnt;
     VOS_UINT16                          usFirstCommaPos;
-    AT_FACAUTHPUBKEY_SET_REQ_STRU      *pstFacAuthPubKey;
+    VOS_UINT16                          usSecCommaPos;
     VOS_UINT16                          usFirstParaLen;
     VOS_UINT16                          usSecondParaLen;
-    VOS_UINT32                          ulResult;
-    /* Modified by l60609 for DSDA Phase III, 2013-2-25, Begin */
-    AT_PARSE_CMD_NAME_TYPE_STRU         stAtCmdName;
+    VOS_UINT16                          usThirdParaLen;
+    VOS_INT8                            cRet;
+
+    ulTempIndex  = (VOS_UINT32)ucIndex;
+    ulTimerName  = AT_AUTH_PUBKEY_TIMER;
+    ulTimerName |= AT_INTERNAL_PROCESS_TYPE;
+    ulTimerName |= (ulTempIndex<<12);
+
+    pstAuthPubKeyCtx = AT_GetAuthPubkeyExCmdCtxAddr();
 
     TAF_MEM_SET_S(&stAtCmdName, sizeof(stAtCmdName), 0x00, sizeof(stAtCmdName));
-    /* Modified by l60609 for DSDA Phase III, 2013-2-25, End */
 
     /* 局部变量初始化 */
     usPos               = 0;
@@ -2699,54 +2701,46 @@ VOS_UINT32 AT_HandleFacAuthPubKeyCmd(
     usLoop              = 0;
     usCommaCnt          = 0;
     usFirstCommaPos     = 0;
-    pstFacAuthPubKey    = VOS_NULL_PTR;
+    usSecCommaPos       = 0;
     usFirstParaLen      = 0;
     usSecondParaLen     = 0;
-
-    /* 为提高AT解析性能，在入口处判断命令长度是否为AT^FACAUTHPUBKEY设置命令的长度，若不是则直接退出 */
-    if ((VOS_StrLen("AT^FACAUTHPUBKEY=") + AT_FACAUTHPUBKEY_PARA_LEN
-         + VOS_StrLen(",") + AT_FACAUTHPUBKEY_SIGN_PARA_LEN) != usLen)
-    {
-        return AT_FAILURE;
-    }
-
-    usCmdlen = (VOS_UINT16)VOS_StrLen("AT^FACAUTHPUBKEY=");
+    ulFirstParaVal      = 0;
+    ulSecParaVal        = 0;
+    usCmdlen            = (VOS_UINT16)VOS_StrLen("AT^FACAUTHPUBKEYEX=");
 
     pucDataPara = (VOS_UINT8*)PS_MEM_ALLOC(WUEPS_PID_AT, usCmdlen);
     if (VOS_NULL_PTR == pucDataPara)
     {
-        AT_ERR_LOG("AT_HandleFacAuthPubKeyCmd: pucDataPara Memory malloc failed!");
+        AT_ERR_LOG("AT_HandleFacAuthPubKeyExCmd: pucDataPara Memory malloc failed!");
         return AT_FAILURE;
     }
 
     /*拷贝命令名，供后续比较使用*/
-    TAF_MEM_CPY_S(pucDataPara, usCmdlen, pucData, usCmdlen);
+    VOS_MemCpy_s(pucDataPara, usCmdlen, pucData, usCmdlen);
 
     /* AT命令头字符转大写 */
     At_UpString(pucDataPara, usCmdlen);
 
-    /* 待处理的字符串头部不是"AT^FACAUTHPUBKEY="直接返回AT_FAILURE */
-    cRet = VOS_StrNiCmp((VOS_CHAR *)pucDataPara, "AT^FACAUTHPUBKEY=", usCmdlen);
+    /* 待处理的字符串头部不是"AT^FACAUTHPUBKEYEX="直接返回AT_FAILURE */
+    cRet = VOS_StrNiCmp((VOS_CHAR *)pucDataPara, "AT^FACAUTHPUBKEYEX=", usCmdlen);
     if (0 != cRet)
     {
         PS_MEM_FREE(WUEPS_PID_AT, pucDataPara);
         return AT_FAILURE;
     }
 
-
-    AT_SaveCmdElementInfo(ucIndex, (VOS_UINT8*)"^FACAUTHPUBKEY", AT_EXTEND_CMD_TYPE);
+    AT_SaveCmdElementInfo(ucIndex, (VOS_UINT8*)"^FACAUTHPUBKEYEX", AT_EXTEND_CMD_TYPE);
 
     /* 获取命令(不包含命令前缀AT)名称及长度 */
     usPos = (VOS_UINT16)VOS_StrLen("AT");
-    /* Modified by l60609 for DSDA Phase III, 2013-2-25, Begin */
-    stAtCmdName.usCmdNameLen = (VOS_UINT16)VOS_StrLen("^FACAUTHPUBKEY");
-    TAF_MEM_CPY_S(stAtCmdName.aucCmdName,
-               AT_CMD_NAME_LEN + 1,
-               (pucData + usPos),
-               stAtCmdName.usCmdNameLen);
+
+    stAtCmdName.usCmdNameLen = (VOS_UINT16)VOS_StrLen("^FACAUTHPUBKEYEX");
+    VOS_MemCpy_s(stAtCmdName.aucCmdName,
+                 sizeof(stAtCmdName.aucCmdName),
+                 (pucData + usPos),
+                 stAtCmdName.usCmdNameLen);
     stAtCmdName.aucCmdName[stAtCmdName.usCmdNameLen] = '\0';
     usPos += stAtCmdName.usCmdNameLen;
-    /* Modified by l60609 for DSDA Phase III, 2013-2-25, End */
 
     usPos += (VOS_UINT16)VOS_StrLen("=");
 
@@ -2756,66 +2750,75 @@ VOS_UINT32 AT_HandleFacAuthPubKeyCmd(
         if (',' == *(pucData + usLoop))
         {
             usCommaCnt++;
+
             /* 记录下第一个逗号的位置 */
             if (0 == usFirstCommaPos)
             {
                 usFirstCommaPos = usLoop + 1;
             }
+            else
+            {
+                if (0 == usSecCommaPos)
+                {
+                    usSecCommaPos = usLoop + 1;
+                }
+            }
         }
     }
 
-    /* 若逗号个数不为1，则AT命令结果返回失败 */
-    if (1 != usCommaCnt)
+    /* 若逗号个数不为2，则AT命令结果返回失败 */
+    if (2 != usCommaCnt)
     {
-        AT_WARN_LOG("AT_HandleFacAuthPubKeyCmd: usCommaCnt != 1!");
+        AT_WARN_LOG("AT_HandleFacAuthPubKeyExCmd: usCommaCnt != 2!");
         PS_MEM_FREE(WUEPS_PID_AT, pucDataPara);
         At_FormatResultData(ucIndex, AT_CME_INCORRECT_PARAMETERS);
+        AT_ClearAuthPubkeyCtx();
+        (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
         return AT_SUCCESS;
     }
 
-    /* 计算两个参数的长度 */
-    usFirstParaLen  = (usFirstCommaPos - usPos) - 1;
-    usSecondParaLen = usLen - usFirstCommaPos;
+    /* 计算参数的长度 */
+    usFirstParaLen  = (usFirstCommaPos - usPos) - (VOS_UINT16)VOS_StrLen(",");
+    usSecondParaLen = usSecCommaPos - usFirstCommaPos - (VOS_UINT16)VOS_StrLen(",");
+    usThirdParaLen  = usLen - usSecCommaPos;
 
-    /* 参数长度不正确，则AT命令结果返回失败 */
-    if ((AT_FACAUTHPUBKEY_PARA_LEN != usFirstParaLen )
-     || (AT_FACAUTHPUBKEY_SIGN_PARA_LEN != usSecondParaLen))
+    /* 获取第一个参数值 */
+    if (AT_FAILURE == atAuc2ul(pucData + usPos, usFirstParaLen, &ulFirstParaVal))
     {
+        AT_WARN_LOG("AT_HandleFacAuthPubKeyExCmd: ulFirstParaVal value invalid");
         PS_MEM_FREE(WUEPS_PID_AT, pucDataPara);
         At_FormatResultData(ucIndex, AT_CME_INCORRECT_PARAMETERS);
+        AT_ClearAuthPubkeyCtx();
+        (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
         return AT_SUCCESS;
     }
 
-    /* 申请参数解析缓存结构 */
-    pstFacAuthPubKey = (AT_FACAUTHPUBKEY_SET_REQ_STRU*)PS_MEM_ALLOC(WUEPS_PID_AT, sizeof(AT_FACAUTHPUBKEY_SET_REQ_STRU));
-    if (VOS_NULL_PTR == pstFacAuthPubKey)
+    /* 获取第二个参数值 */
+    if (AT_FAILURE == atAuc2ul(pucData + usFirstCommaPos, usSecondParaLen, &ulSecParaVal))
     {
+        AT_WARN_LOG("AT_HandleFacAuthPubKeyExCmd: ulSecParaVal value invalid");
         PS_MEM_FREE(WUEPS_PID_AT, pucDataPara);
-        At_FormatResultData(ucIndex, AT_ERROR);
-        AT_ERR_LOG("AT_HandleFacAuthPubKeyCmd: pstFacAuthPubKey Memory malloc failed!");
+        At_FormatResultData(ucIndex, AT_CME_INCORRECT_PARAMETERS);
+        AT_ClearAuthPubkeyCtx();
+        (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
         return AT_SUCCESS;
     }
-
-    /* 保存第一个参数 */
-    TAF_MEM_CPY_S(pstFacAuthPubKey->aucPubKey, AT_FACAUTHPUBKEY_PARA_LEN, pucData + usPos, usFirstParaLen);
-
-    /* 保存第二个参数 */
-    TAF_MEM_CPY_S(pstFacAuthPubKey->aucPubKeySign, AT_FACAUTHPUBKEY_SIGN_PARA_LEN, pucData + usFirstCommaPos, usSecondParaLen);
 
     /* 设置命令类型，操作类型和参数个数 */
     g_stATParseCmd.ucCmdOptType = AT_CMD_OPT_SET_PARA_CMD;
     gucAtCmdFmtType = AT_EXTEND_CMD_TYPE;
 
-    printk(KERN_ERR "\n AT_HandleFacAuthPubKeyCmd enter\n");
+    printk(KERN_ERR "\n AT_HandleFacAuthPubKeyExCmd enter \n");
 
-    ulResult = AT_SetFacAuthPubkeyPara(ucIndex, pstFacAuthPubKey);
+    ulResult = AT_SetFacAuthPubkeyExPara(ucIndex, ulFirstParaVal, ulSecParaVal, usThirdParaLen, (pucData + usSecCommaPos));
     if (AT_WAIT_ASYNC_RETURN != ulResult)
     {
-        printk(KERN_ERR "\n AT_HandleFacAuthPubKeyCmd return OK\n");
+        printk(KERN_ERR "\n AT_HandleFacAuthPubKeyExCmd return OK \n");
+
         At_FormatResultData(ucIndex, ulResult);
     }
+
     PS_MEM_FREE(WUEPS_PID_AT, pucDataPara);
-    PS_MEM_FREE(WUEPS_PID_AT, pstFacAuthPubKey);
     return AT_SUCCESS;
 }
 
@@ -3460,12 +3463,11 @@ VOS_UINT32 At_HandleApModemSpecialCmd(
         return AT_FAILURE;
     }
 
-    /* 处理AT^FACAUTHPUBKEY=<pubkey>,<signature>设置命令(参数<pubkey>超长) */
-    if (AT_SUCCESS == AT_HandleFacAuthPubKeyCmd(ucIndex, pucData, usLen))
+    /* 处理AT^FACAUTHPUBKEYEX=<index>,<total>,<pubkey>设置命令(参数<pubkey>超长) */
+    if (AT_SUCCESS == AT_HandleFacAuthPubKeyExCmd(ucIndex, pucData, usLen))
     {
         return AT_SUCCESS;
     }
-
 
 
     /* 处理AT^SIMLOCKDATAWRITE=<simlock_data_write>设置命令(参数<simlock_data_write>超长) */
@@ -4211,6 +4213,9 @@ TAF_VOID At_TimeOutProc(
                 break;
     /* Add by w00199382 for V7代码同步, 2012-04-07, End   */
 
+            case AT_AUTH_PUBKEY_TIMER :
+                AT_ClearAuthPubkeyCtx();
+                break;
 
 
             default:

@@ -184,6 +184,8 @@
 #define KICK_WATCHDOG_TIME 1000
 #define BATTERY_CAPACITY_HIGH_TH 95
 
+#define DIRECT_CHARGER_SET_DISABLE_FLAGS        1
+#define DIRECT_CHARGER_CLEAR_DISABLE_FLAGS      0
 enum adapter_vendor{
 	RICHTEK_ADAPTER,
 	IWATT_ADAPTER,
@@ -266,6 +268,11 @@ enum direct_charge_fault_type {
 	DIRECT_CHARGE_FAULT_INPUT_OCP,
 	DIRECT_CHARGE_FAULT_VDROP_OVP,
 	DIRECT_CHARGE_FAULT_TOTAL,
+};
+enum disable_direct_charger_type {
+	DIRECT_CHARGER_SYS_NODE = 0,
+	DIRECT_CHARGER_FATAL_ISC_TYPE,
+	__MAX_DISABLE_DIRECT_CHAGER,
 };
 static const char *const loadswitch_name[] = {
 	[0] = "RICHTEK",
@@ -393,6 +400,7 @@ struct direct_charge_device {
 	int error_cnt;
 	unsigned int use_5A;
 	int sysfs_enable_charger;
+	int sysfs_disable_chatger[__MAX_DISABLE_DIRECT_CHAGER];
 	int vbat_ovp_enable_charger;
 	int sysfs_iin_thermal;
 	int threshold_caculation_interval;
@@ -485,6 +493,8 @@ int is_in_scp_charging_stage(void);
 #define HI6523_CV_CUT 150
 extern bool is_hi6523_cv_limit(void);
 #endif
+extern int set_direct_charger_disable_flags(int, int);
+extern struct blocking_notifier_head direct_charger_control_head;
 
 #ifdef CONFIG_LLT_TEST
 #endif

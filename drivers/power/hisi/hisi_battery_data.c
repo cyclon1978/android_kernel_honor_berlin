@@ -187,6 +187,68 @@ static int get_age_para (struct device_node *np, struct hisi_coul_battery_data *
 	}
 	return 0;
 }
+static int get_dat_decress_para(struct device_node *np, struct hisi_coul_battery_data *pdat)
+{
+	int ret = 0;
+	if((NULL == np)||(NULL == pdat))
+		return -EINVAL;
+	if(strstr(saved_command_line, "batt_decress_flag=true")){
+		ret = of_property_read_u32(np, "fcc_decress", &(pdat->fcc));
+	if (ret) {
+		hwlog_err("get fcc decress failed\n");
+		return -EINVAL;
+		}
+		ret = of_property_read_u32(np, "vbat_max_decress", (unsigned int *)(&(pdat->vbatt_max)));
+	if (ret) {
+		hwlog_err("get vbat_max decress failed\n");
+		return -EINVAL;
+		}
+	}
+	return 0;
+}
+static int get_decress_fcc_temp(struct device_node *np, struct hisi_coul_battery_data *pdat,int index)
+{
+	int ret = 0;
+	if((NULL == np)||(NULL == pdat))
+		return -EINVAL;
+	if(strstr(saved_command_line, "batt_decress_flag=true")){
+		ret = of_property_read_u32_index(np, "fcc_temp_decress", index, (unsigned int *)(&(pdat->fcc_temp_lut->y[index])));
+	if (ret) {
+		hwlog_err("get fcc_temp decress[%d] failed\n", index);
+		return -EINVAL;
+		}
+	}
+	return 0;
+}
+static int get_decress_ocv_tbl(struct device_node *np, struct hisi_coul_battery_data *pdat,int row,int col)
+{
+	int ret = 0;
+	if((NULL == np)||(NULL == pdat))
+		return -EINVAL;
+	if(strstr(saved_command_line, "batt_decress_flag=true")){//battery need decreas vol
+		ret = of_property_read_u32_index(np, "pc_temp_ocv_ocv0", row * 6 + col, (unsigned int *)(&(pdat->pc_temp_ocv_lut0->ocv[row][col])));
+	if (ret) {
+		hwlog_err("get pc_temp_ocv_ocv drcress[%d] failed\n", row * 6 + col);
+		return -EINVAL;
+		}
+	}
+	return 0;
+}
+static int get_decress_segment_para(struct device_node *np, int index,const char **data_string)
+{
+	int ret = 0;
+	if((NULL == np)||(NULL == data_string))
+		return -EINVAL;
+	if(strstr(saved_command_line, "batt_decress_flag=true")){
+		ret = of_property_read_string_index(np, "segment_para_decress", index, data_string);
+	if (ret) {
+		hwlog_err("get segment_para_decress failed\n");
+		return -EINVAL;
+		}
+	}
+	return 0;
+}
+
 static int get_dat(struct device_node *np, struct hisi_coul_battery_data *pdat)
 {
 	int ret = 0;
@@ -297,6 +359,8 @@ static int get_dat(struct device_node *np, struct hisi_coul_battery_data *pdat)
 			hwlog_err("get segment_para failed\n");
 			return -EINVAL;
 		}
+		ret = get_decress_segment_para(np,i,&chrg_data_string);
+		hisi_bat_info("get_decress_segment_para res %d",ret);
 		pdat->chrg_para->segment_data[i / (SEGMENT_PARA_TOTAL)][i % (SEGMENT_PARA_TOTAL)] = simple_strtol(chrg_data_string, NULL, 10);
 		hisi_bat_info("chrg_para->segment_data[%d][%d] = %d\n",
 			i / (SEGMENT_PARA_TOTAL),
@@ -320,8 +384,13 @@ static int get_dat(struct device_node *np, struct hisi_coul_battery_data *pdat)
 			hwlog_err("get fcc_temp[%d] failed\n", i);
 			return -EINVAL;
 		}
+		ret = get_decress_fcc_temp(np,pdat,i);
+		hisi_bat_info("get_decress_fcc_temp res %d",ret);
 		hisi_bat_info("fcc_temp[%d] is %d\n", i, pdat->fcc_temp_lut->y[i]);
 	}
+	 /*decress para*/
+	ret = get_dat_decress_para(np, pdat);
+	hisi_bat_info("get decress para from dts res %d\n",ret);
 	/* fcc_sf */
 	ret = of_property_read_u32(np, "fcc_sf_cols", (unsigned int *)(&(pdat->fcc_sf_lut->cols)));
 	if (ret) {
@@ -439,6 +508,8 @@ static int get_dat(struct device_node *np, struct hisi_coul_battery_data *pdat)
 				hwlog_err("get pc_temp_ocv_ocv[%d] failed\n", j * 6 + i);
 				return -EINVAL;
 			}
+	ret = get_decress_ocv_tbl(np,pdat,j,i);
+	hisi_bat_info("get_decress_ocv_tbl res %d",ret);
 			hisi_bat_info("rbatt_sf_sf[%d] is %d\n", j * 6 + i, pdat->pc_temp_ocv_lut0->ocv[j][i]);
 		}
 	}

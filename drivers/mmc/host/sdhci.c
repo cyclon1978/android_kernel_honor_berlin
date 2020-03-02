@@ -3697,11 +3697,13 @@ int sdhci_add_host(struct sdhci_host *host)
 #endif
 	mmc_add_host(mmc);
 
+#ifdef CONFIG_HISI_DEBUG_FS
 	pr_info("%s: SDHCI controller on %s [%s] using %s\n",
 		mmc_hostname(mmc), host->hw_name, dev_name(mmc_dev(mmc)),
 		(host->flags & SDHCI_USE_ADMA) ?
 		(host->flags & SDHCI_USE_64_BIT_DMA) ? "ADMA 64-bit" : "ADMA" :
 		(host->flags & SDHCI_USE_SDMA) ? "DMA" : "PIO");
+#endif
 
 	sdhci_enable_card_detection(host);
 

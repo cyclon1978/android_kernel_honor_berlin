@@ -149,6 +149,7 @@ OAL_STATIC countryinfo_stru g_ast_country_info_table[] =
     {REGDOMAIN_ETSI, {'M', 'A'}}, //MOROCCO
     {REGDOMAIN_ETSI, {'M', 'C'}}, //MONACO
     {REGDOMAIN_ETSI, {'M', 'K'}}, //MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF
+    {REGDOMAIN_ETSI, {'M','M'}}, //MYANMAR
     {REGDOMAIN_FCC, {'M','N'}}, //MONGOLIA
     {REGDOMAIN_FCC, {'M', 'O'}}, //MACAO
     {REGDOMAIN_FCC, {'M', 'P'}}, //NORTHERN MARIANA ISLANDS
@@ -183,6 +184,7 @@ OAL_STATIC countryinfo_stru g_ast_country_info_table[] =
     {REGDOMAIN_ETSI, {'R', 'U'}}, //RUSSIA
     {REGDOMAIN_FCC, {'R', 'W'}}, //RWANDA
     {REGDOMAIN_ETSI, {'S', 'A'}}, //SAUDI ARABIA
+    {REGDOMAIN_ETSI, {'S', 'D'}}, //SUDAN ,REPUBLIC OF THE
     {REGDOMAIN_ETSI, {'S', 'E'}}, //SWEDEN
     {REGDOMAIN_ETSI, {'S', 'G'}}, //SINGAPORE
     {REGDOMAIN_ETSI, {'S', 'I'}}, //SLOVENNIA

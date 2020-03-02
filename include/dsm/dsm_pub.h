@@ -174,6 +174,8 @@
 #define ERROR_REFRESH_FCC_OUTSIDE          (DSM_BATTERY_ERROR_NO_BASE + 75)
 #define ERROR_RESUME_SOC_JUMP              (DSM_BATTERY_ERROR_NO_BASE + 76)
 
+#define ERROR_FATAL_ISC_CASE1              (DSM_BATTERY_ERROR_NO_BASE + 77)
+#define ERROR_FATAL_ISC_CASE2              (DSM_BATTERY_ERROR_NO_BASE + 78)
 
 /* SMPL*/
 #define ERROR_NO_SMPL                       (920003000)

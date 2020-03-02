@@ -38807,123 +38807,272 @@ VOS_UINT32 AT_SetHukPara(VOS_UINT8 ucIndex)
 }
 
 /*****************************************************************************
- 函 数 名  : AT_DecodeFacAuthPubkeyPara
- 功能描述  : ^FACAUTHPUBKEY设置命令参数解码
- 输入参数  : pstFacAuthPubKey
+ 函 数 名  : AT_ProcAuthPubkeyExData
+ 功能描述  :
+ 输入参数  :
+
  输出参数  : 无
  返 回 值  : VOS_UINT32
  调用函数  :
  被调函数  :
 
  修改历史      :
-  1.日    期   : 2012年04月10日
-    作    者   : l00198894
-    修改内容   : AP-Modem锁网锁卡项目新增函数
-
+  1.日    期   : 2016年05月10日
+    作    者   : z00301431
+    修改内容   : 锁网锁卡安全升级项目新增 
 *****************************************************************************/
-VOS_UINT32 AT_DecodeFacAuthPubkeyPara(AT_FACAUTHPUBKEY_SET_REQ_STRU *pstFacAuthPubKey)
+VOS_UINT32 AT_ProcAuthPubkeyExData(
+    VOS_UINT32                          ulParaLen,
+    VOS_UINT8                          *pucPubKeyData
+)
 {
-    VOS_UINT32                          ulResult;
-    VOS_UINT16                          usLength;
+    AT_AUTH_PUBKEYEX_CMD_PROC_CTX          *pstAuthPubKeyCtx = VOS_NULL_PTR;
+    VOS_UINT8                              *pTempData = VOS_NULL_PTR;
+    VOS_UINT16                              usTotalLen;
 
-    /* 局部变量初始化 */
-    ulResult = VOS_NULL;
-    usLength = AT_FACAUTHPUBKEY_PARA_LEN;
-
-    ulResult = At_AsciiNum2HexString(pstFacAuthPubKey->aucPubKey, &usLength);
-    if ( (AT_SUCCESS != ulResult) || (DRV_AGENT_PUBKEY_LEN != usLength) )
+    if ((VOS_NULL_PTR == pucPubKeyData)
+     || (0 == ulParaLen))
     {
+        AT_ERR_LOG("AT_ProcAuthPubkeyExData: NULL Pointer");
+
         return AT_CME_INCORRECT_PARAMETERS;
     }
 
-    usLength = AT_FACAUTHPUBKEY_SIGN_PARA_LEN;
+    pstAuthPubKeyCtx = AT_GetAuthPubkeyExCmdCtxAddr();
 
-    ulResult = At_AsciiNum2HexString(pstFacAuthPubKey->aucPubKeySign, &usLength);
-    if ( (AT_SUCCESS != ulResult) || (DRV_AGENT_PUBKEY_SIGNATURE_LEN != usLength) )
+    /* 当前是一次新的设置过程，收到的是第一条AT命令 */
+    if (VOS_NULL_PTR == pstAuthPubKeyCtx->pucData)
     {
-        return AT_CME_INCORRECT_PARAMETERS;
+        pstAuthPubKeyCtx->pucData = (VOS_UINT8*)PS_MEM_ALLOC(WUEPS_PID_AT, ulParaLen);
+
+        /* 分配内存失败，直接返回 */
+        if (VOS_NULL_PTR == pstAuthPubKeyCtx->pucData)
+        {
+            AT_ERR_LOG("AT_ProcAuthPubkeyExData: first data, Alloc mem fail");
+
+            return AT_ERROR;
+        }
+
+        TAF_MEM_CPY_S(pstAuthPubKeyCtx->pucData, ulParaLen, pucPubKeyData, ulParaLen);
+
+        pstAuthPubKeyCtx->usParaLen = (VOS_UINT16)ulParaLen;
+    }
+    else
+    {
+        /* 当前不是收到第一条AT命令，需要拼接码流 */
+        usTotalLen = (VOS_UINT16)ulParaLen + pstAuthPubKeyCtx->usParaLen;
+
+        pTempData = (VOS_UINT8*)PS_MEM_ALLOC(WUEPS_PID_AT, usTotalLen);
+
+                /* 分配内存失败，直接返回 */
+        if (VOS_NULL_PTR == pTempData)
+        {
+            AT_ERR_LOG("AT_ProcAuthPubkeyExData: Non-first data, Alloc mem fail");
+
+            return AT_ERROR;
+        }
+
+        TAF_MEM_CPY_S(pTempData, usTotalLen, pstAuthPubKeyCtx->pucData, pstAuthPubKeyCtx->usParaLen);
+        TAF_MEM_CPY_S((pTempData + pstAuthPubKeyCtx->usParaLen), usTotalLen, pucPubKeyData, ulParaLen);
+        PS_MEM_FREE(WUEPS_PID_AT, pstAuthPubKeyCtx->pucData);
+
+        pstAuthPubKeyCtx->usParaLen = usTotalLen;
+        pstAuthPubKeyCtx->pucData   = pTempData;
     }
 
     return AT_SUCCESS;
 }
 
 /*****************************************************************************
- 函 数 名  : AT_SetFacAuthPubkeyPara
- 功能描述  : ^FACAUTHPUBKEY设置命令处理函数
+ 函 数 名  : AT_SetFacAuthPubkeyExPara
+ 功能描述  : ^FACAUTHPUBKEYEX设置命令处理函数
  输入参数  : VOS_UINT8 ucIndex
-             AT_FACAUTHPUBKEY_SET_REQ_STRU      *pstFacAuthPubKey
+
  输出参数  : 无
  返 回 值  : VOS_UINT32
  调用函数  :
  被调函数  :
 
  修改历史      :
-  1.日    期   : 2012年04月10日
-    作    者   : l00198894
-    修改内容   : AP-Modem锁网锁卡项目新增函数
-  2.日    期   : 2012年8月13日
-    作    者   : l60609
-    修改内容   : MUX:增加MUX通道的处理
+  1.日    期   : 2016年05月10日
+    作    者   : z00301431
+    修改内容   : 锁网锁卡安全升级项目新增
 *****************************************************************************/
-VOS_UINT32 AT_SetFacAuthPubkeyPara(
+VOS_UINT32 AT_SetFacAuthPubkeyExPara(
     VOS_UINT8                           ucIndex,
-    AT_FACAUTHPUBKEY_SET_REQ_STRU      *pstFacAuthPubKey
+    VOS_UINT32                          ulCurrIndex,
+    VOS_UINT32                          ulTotal,
+    VOS_UINT32                          ulParaLen,
+    VOS_UINT8                          *pucPubKeyData
 )
 {
+    AT_AUTH_PUBKEYEX_CMD_PROC_CTX          *pstAuthPubKeyCtx = VOS_NULL_PTR;
+    DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU   *pstFacAuthPubkeySetReq = VOS_NULL_PTR;
     VOS_UINT32                              ulResult;
-    DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU    stFacAuthPubkeySetReq;
+    VOS_UINT32                              ulTempIndex;
+    VOS_UINT32                              ulTimerName;
 
-    /* 局部变量初始化 */
-    TAF_MEM_SET_S(&stFacAuthPubkeySetReq, sizeof(stFacAuthPubkeySetReq), 0x00, sizeof(DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU));
+    ulTempIndex  = (VOS_UINT32)ucIndex;
+    ulTimerName  = AT_AUTH_PUBKEY_TIMER;
+    ulTimerName |= AT_INTERNAL_PROCESS_TYPE;
+    ulTimerName |= (ulTempIndex<<12);
 
-    /* 通道检查 */
-    /* Modified by L60609 for MUX，2012-08-13,  Begin */
-    if (VOS_FALSE == AT_IsApPort(ucIndex))
-    /* Modified by L60609 for MUX，2012-08-13,  End */
+
+    pstAuthPubKeyCtx = AT_GetAuthPubkeyExCmdCtxAddr();
+
+    /* Index要小于total */
+    if (ulCurrIndex > ulTotal)
     {
-        return AT_ERROR;
+        AT_WARN_LOG2("AT_SetFacAuthPubkeyExPara: Index bigger then total", ulCurrIndex, ulTotal);
+
+        AT_ClearAuthPubkeyCtx();
+        (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+        return AT_CME_INCORRECT_PARAMETERS;
     }
 
-    /* 将字符串参数转换为码流 */
-    ulResult = AT_DecodeFacAuthPubkeyPara(pstFacAuthPubKey);
-    if (AT_SUCCESS != ulResult)
+    /* 当前不再设置过程中，第一次收到此命令 */
+    if (VOS_FALSE == pstAuthPubKeyCtx->ucSettingFlag)
     {
-        return ulResult;
-    }
-    TAF_MEM_CPY_S(stFacAuthPubkeySetReq.aucPubKey,
-               sizeof(stFacAuthPubkeySetReq.aucPubKey),
-               pstFacAuthPubKey->aucPubKey,
-               DRV_AGENT_PUBKEY_LEN);
-    TAF_MEM_CPY_S(stFacAuthPubkeySetReq.aucPubKeySign,
-               sizeof(stFacAuthPubkeySetReq.aucPubKeySign),
-               pstFacAuthPubKey->aucPubKeySign,
-               DRV_AGENT_PUBKEY_SIGNATURE_LEN);
+        if (1 != ulCurrIndex)
+        {
+            AT_WARN_LOG1("AT_SetFacAuthPubkeyExPara: Invalid ulCurrIndex", ulCurrIndex);
 
-    /* 转换成功, 发送跨核消息到C核, 设置产线公钥 */
-    ulResult = AT_FillAndSndAppReqMsg(gastAtClientTab[ucIndex].usClientId,
-                                      gastAtClientTab[ucIndex].opId,
-                                      DRV_AGENT_FACAUTHPUBKEY_SET_REQ,
-                                      &stFacAuthPubkeySetReq,
-                                      sizeof(DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU),
-                                      I0_WUEPS_PID_DRV_AGENT);
-    if (TAF_SUCCESS != ulResult)
+            return AT_CME_INCORRECT_PARAMETERS;
+        }
+
+        /* 将字符串参数转换为码流 */
+        ulResult = AT_ProcAuthPubkeyExData(ulParaLen, pucPubKeyData);
+        if (AT_SUCCESS != ulResult)
+        {
+            AT_WARN_LOG1("AT_SetFacAuthPubkeyExPara: AT_ProcAuthPubkeyExData fail %d", ulResult);
+
+            return ulResult;
+        }
+
+        pstAuthPubKeyCtx->ucClientId    = ucIndex;
+        pstAuthPubKeyCtx->ucTotalNum    = (VOS_UINT8)ulTotal;
+        pstAuthPubKeyCtx->ucCurIdx      = (VOS_UINT8)ulCurrIndex;
+        pstAuthPubKeyCtx->ucSettingFlag = VOS_TRUE;
+    }
+    else
     {
-        AT_WARN_LOG("AT_SetFacAuthPubkeyPara: AT_FillAndSndAppReqMsg fail.");
-        return AT_ERROR;
+        /* 必须在同一个通道下发命令 */
+        if (ucIndex != pstAuthPubKeyCtx->ucClientId)
+        {
+            AT_WARN_LOG2("AT_SetFacAuthPubkeyExPara: port error, ucIndex %d ucClientId, %d", ucIndex, pstAuthPubKeyCtx->ucClientId);
+
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return AT_CME_INCORRECT_PARAMETERS;
+        }
+
+        /* 当前已经在设置中，当前下发的total与之前之前下发的total不同 */
+        if ((VOS_UINT8)ulTotal != pstAuthPubKeyCtx->ucTotalNum)
+        {
+            AT_WARN_LOG2("AT_SetFacAuthPubkeyExPara: total %d wrong, %d", ulTotal, pstAuthPubKeyCtx->ucTotalNum);
+
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return AT_CME_INCORRECT_PARAMETERS;
+        }
+
+        /* 当前下发的Index不是之前下发Index+1 */
+        if ((VOS_UINT8)ulCurrIndex != (pstAuthPubKeyCtx->ucCurIdx + 1))
+        {
+            AT_WARN_LOG2("AT_SetFacAuthPubkeyExPara: CurrIndex %d wrong, %d", ulCurrIndex, pstAuthPubKeyCtx->ucCurIdx);
+
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return AT_CME_INCORRECT_PARAMETERS;
+        }
+
+        /* 将字符串参数转换为码流 */
+        ulResult = AT_ProcAuthPubkeyExData(ulParaLen, pucPubKeyData);
+        if (AT_SUCCESS != ulResult)
+        {
+            AT_WARN_LOG1("AT_SetFacAuthPubkeyExPara: AT_ProcAuthPubkeyExData fail %d", ulResult);
+
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return ulResult;
+        }
+
+        /* 更新CurrIndex */
+        pstAuthPubKeyCtx->ucCurIdx      = (VOS_UINT8)ulCurrIndex;
     }
 
-    /* 由于FACAUTHPUBKEY特殊处理，需要手动启动定时器*/
-    if (AT_SUCCESS != At_StartTimer(AT_SET_PARA_TIME, ucIndex))
+    /* 如果还未收齐数据，则启动定时器，回复OK */
+    if (pstAuthPubKeyCtx->ucCurIdx < pstAuthPubKeyCtx->ucTotalNum)
     {
-        AT_WARN_LOG("AT_SetFacAuthPubkeyPara: At_StartTimer fail.");
-        return AT_ERROR;
+        (VOS_VOID)AT_StartRelTimer(&(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer),
+                                   AT_AUTH_PUBKEY_PROTECT_TIMER_LEN,
+                                   ulTimerName,
+                                   0, VOS_RELTIMER_NOLOOP);
+        return AT_OK;
     }
+    else
+    {
+        /* 已经收齐了数据，转换码流后发给C核 */
+        ulResult = At_AsciiNum2HexString(pstAuthPubKeyCtx->pucData, &pstAuthPubKeyCtx->usParaLen);
+        if ((AT_SUCCESS != ulResult)
+         || ((DRV_AGENT_PUBKEY_LEN + DRV_AGENT_PUBKEY_SIGNATURE_LEN)!= pstAuthPubKeyCtx->usParaLen))
+        {
+            AT_WARN_LOG2("AT_SetFacAuthPubkeyExPara: At_AsciiNum2HexString fail ulResult: %d ulParaLen: %d",
+                         ulResult,
+                         pstAuthPubKeyCtx->usParaLen);
 
-    g_stParseContext[ucIndex].ucClientStatus = AT_FW_CLIENT_STATUS_PEND;
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return AT_CME_INCORRECT_PARAMETERS;
+        }
 
-    /* 设置AT模块实体的状态为等待异步返回 */
-    gastAtClientTab[ucIndex].CmdCurrentOpt = AT_CMD_FACAUTHPUBKEY_SET;
-    return AT_WAIT_ASYNC_RETURN;
+        pstFacAuthPubkeySetReq = (DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU *)PS_MEM_ALLOC(WUEPS_PID_AT, sizeof(DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU));
+
+        if (VOS_NULL_PTR == pstFacAuthPubkeySetReq)
+        {
+            AT_WARN_LOG("AT_SetFacAuthPubkeyExPara: alloc mem fail.");
+
+            AT_ClearAuthPubkeyCtx();
+            (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+            return AT_ERROR;
+        }
+
+        TAF_MEM_CPY_S(pstFacAuthPubkeySetReq, sizeof(DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU), pstAuthPubKeyCtx->pucData, pstAuthPubKeyCtx->usParaLen);
+
+        AT_ClearAuthPubkeyCtx();
+        (VOS_VOID)AT_StopRelTimer(ulTimerName, &(pstAuthPubKeyCtx->hAuthPubkeyProtectTimer));
+        /* 转换成功, 发送跨核消息到C核, 设置产线公钥 */
+        ulResult = AT_FillAndSndAppReqMsg(gastAtClientTab[ucIndex].usClientId,
+                                          gastAtClientTab[ucIndex].opId,
+                                          DRV_AGENT_FACAUTHPUBKEY_SET_REQ,
+                                          pstFacAuthPubkeySetReq,
+                                          sizeof(DRV_AGENT_FACAUTHPUBKEY_SET_REQ_STRU),
+                                          I0_WUEPS_PID_DRV_AGENT);
+
+        PS_MEM_FREE(WUEPS_PID_AT, pstFacAuthPubkeySetReq);
+
+        if (TAF_SUCCESS != ulResult)
+        {
+            AT_WARN_LOG("AT_SetFacAuthPubkeyExPara: AT_FillAndSndAppReqMsg fail.");
+			
+            return AT_ERROR;
+        }
+
+        /* 由于FACAUTHPUBKEYEX特殊处理，需要手动启动定时器*/
+        if (AT_SUCCESS != At_StartTimer(AT_SET_PARA_TIME, ucIndex))
+        {
+            AT_WARN_LOG("AT_SetFacAuthPubkeyExPara: At_StartTimer fail.");
+
+            return AT_ERROR;
+        }
+
+        g_stParseContext[ucIndex].ucClientStatus = AT_FW_CLIENT_STATUS_PEND;
+
+        /* 设置AT模块实体的状态为等待异步返回 */
+        gastAtClientTab[ucIndex].CmdCurrentOpt = AT_CMD_FACAUTHPUBKEYEX_SET;
+
+        return AT_WAIT_ASYNC_RETURN;
+    }
 }
 
 

@@ -1421,6 +1421,8 @@ static void f2fs_put_super(struct super_block *sb)
 
 	f2fs_msg(sb, KERN_ALERT, "f2fs begin to put super\n");
 	if (sbi->s_proc) {
+		remove_proc_entry("resizf2fs_info", sbi->s_proc);
+
 		remove_proc_entry("segment_info", sbi->s_proc);
 		remove_proc_entry("segment_bits", sbi->s_proc);
 		remove_proc_entry("undiscard_info", sbi->s_proc);
@@ -1726,6 +1728,21 @@ static const struct file_operations f2fs_seq_##_name##_fops = {		\
 
 F2FS_PROC_FILE_DEF(segment_info);
 F2FS_PROC_FILE_DEF(segment_bits);
+
+static int resizf2fs_info_seq_show(struct seq_file *seq, void *offset)
+{
+	struct super_block *sb = seq->private;
+	struct f2fs_sb_info *sbi = F2FS_SB(sb);
+
+	seq_printf(seq, "total_node_count: %u\n"
+		"total_valid_node_count: %u\n",
+		sbi->total_node_count, sbi->total_valid_node_count);
+	return 0;
+}
+
+
+F2FS_PROC_FILE_DEF(resizf2fs_info);
+
 
 static int undiscard_info_seq_show(struct seq_file *seq, void *offset)
 {
@@ -3012,6 +3029,9 @@ try_onemore:
 		proc_create_data("undiscard_info", S_IRUGO, sbi->s_proc,
 				&f2fs_seq_undiscard_info_fops, sb);
 		f2fs_build_bd_stat(sbi);
+
+		proc_create_data("resizf2fs_info", S_IRUGO, sbi->s_proc,
+				&f2fs_seq_resizf2fs_info_fops, sb);
 	}
 
 	sbi->s_kobj.kset = f2fs_kset;

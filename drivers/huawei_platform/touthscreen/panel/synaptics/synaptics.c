@@ -5203,7 +5203,14 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 {
 	int retval;
 	unsigned char reg_addr = addr & MASK_8BIT;
-	unsigned char wr_buf[length + 1];
+	unsigned char *wr_buf;
+	wr_buf = kzalloc(length + 1, GFP_KERNEL);
+	if (!wr_buf) {
+			dev_err(rmi4_data->pdev->dev.parent,
+					  "%s: Failed to alloc mem for buffer\n",
+					  __func__);
+			return -ENOMEM;
+	}
 	wr_buf[0] = reg_addr;
 
 	if (rmi4_data->use_ub_addr) {
@@ -5235,6 +5242,7 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 	}
 
 exit:
+	kfree(wr_buf);
 	return retval;
 }
 

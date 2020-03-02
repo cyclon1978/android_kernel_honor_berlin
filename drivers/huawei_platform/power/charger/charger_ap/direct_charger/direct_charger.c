@@ -1138,6 +1138,27 @@ FuncEnd:
 	strncat(dc_err_dsm_buff, tmp_buf, strlen(tmp_buf));
 	return FAIL;
 }
+int set_direct_charger_disable_flags(int val, int type)
+{
+	struct direct_charge_device *di = g_di;
+	int i;
+	int disable = 0;
+	if(!di) {
+		hwlog_err("NULL direct_charge_device pointer found in %s.\n", __func__);
+		return -1;
+	}
+	if(type < 0 || type >= __MAX_DISABLE_DIRECT_CHAGER){
+		hwlog_err("set direct charger to %d with wrong type(%d) in %s.\n",
+					val, type, __func__);
+		return -1;
+	}
+	di->sysfs_disable_chatger[type] = val;
+	for( i = 0; i < __MAX_DISABLE_DIRECT_CHAGER; i++){
+		disable |= di->sysfs_disable_chatger[i];
+	}
+	di->sysfs_enable_charger = !disable;
+	return 0;
+}
 static void scp_stop_charging(void)
 {
 	int ret;
@@ -1206,7 +1227,8 @@ static void scp_stop_charging(void)
 	{
 		hwlog_info("%s: vbat - vbus_vol = %d!\n", __func__, vbat - vbus_vol);
 		if (!strstr(saved_command_line, "androidboot.swtype=factory")) {
-			di->sysfs_enable_charger = 1;
+			set_direct_charger_disable_flags(DIRECT_CHARGER_CLEAR_DISABLE_FLAGS,
+                                             DIRECT_CHARGER_SYS_NODE);
 		}
 		di->error_cnt = 0;
 		di->dc_open_retry_cnt = 0;
@@ -2409,7 +2431,8 @@ void direct_charge_stop_charging(void)
 	di->ls_ibus = 0;
 	di->compensate_v = 0;
 	if (!strstr(saved_command_line, "androidboot.swtype=factory")) {
-		di->sysfs_enable_charger = 1;
+		set_direct_charger_disable_flags(DIRECT_CHARGER_CLEAR_DISABLE_FLAGS,
+                                         DIRECT_CHARGER_SYS_NODE);
 	}
 	di->ibat_abnormal_cnt = 0;
 	di->max_adaptor_cur = 0;
@@ -2594,6 +2617,7 @@ static ssize_t direct_charge_sysfs_store(struct device *dev,
 	struct direct_charge_sysfs_field_info *info = NULL;
 	struct direct_charge_device *di = dev_get_drvdata(dev);
 	long val = 0;
+	int ret;
 
 	info = direct_charge_sysfs_field_lookup(attr->attr.name);
 	if (!info)
@@ -2603,7 +2627,12 @@ static ssize_t direct_charge_sysfs_store(struct device *dev,
 	case DIRECT_CHARGE_SYSFS_ENABLE_CHARGER:
 		if ((strict_strtol(buf, 10, &val) < 0) || (val < 0) || (val > 1))
 			return -EINVAL;
-		di->sysfs_enable_charger = val;
+		ret = set_direct_charger_disable_flags(
+				val?DIRECT_CHARGER_CLEAR_DISABLE_FLAGS:DIRECT_CHARGER_SET_DISABLE_FLAGS,
+				DIRECT_CHARGER_SYS_NODE);
+		if(ret) {
+			hwlog_err("Set direct charge disable flags failed in %s.", __func__);
+		}
 		hwlog_info("set enable_charger = %d\n", di->sysfs_enable_charger);
 		break;
 	case DIRECT_CHARGE_SYSFS_IIN_THERMAL:

@@ -23,13 +23,13 @@
 	.type	strfind, %function
 strfind:
 .LFB1396:
-	.file 1 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/drivers/huawei_platform/net/hw_netfilter/nf_hw_common.c"
+	.file 1 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/drivers/huawei_platform/net/hw_netfilter/nf_hw_common.c"
 	.loc 1 13 0
 	.cfi_startproc
 .LVL0:
 .LBB210:
 .LBB211:
-	.file 2 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/ctype.h"
+	.file 2 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/ctype.h"
 	.loc 2 40 0
 	adrp	x8, _ctype
 .LBE211:
@@ -1021,7 +1021,7 @@ get_url_path:
 	add	w0, w0, 1
 .LBB284:
 .LBB285:
-	.file 3 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/slab.h"
+	.file 3 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/slab.h"
 	.loc 3 475 0
 	mov	w1, 32
 	movk	w1, 0x208, lsl 16
@@ -1517,7 +1517,7 @@ get_hash_id:
 .LBB309:
 .LBB310:
 .LBB311:
-	.file 4 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jhash.h"
+	.file 4 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jhash.h"
 	.loc 4 151 0
 	mov	w2, 49896
 	.loc 4 155 0
@@ -1538,7 +1538,7 @@ get_hash_id:
 	movk	w1, 0xdead, lsl 16
 .LBB312:
 .LBB313:
-	.file 5 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/bitops.h"
+	.file 5 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/bitops.h"
 	.loc 5 110 0
 	ror	w3, w2, 7
 .LBE313:
@@ -1622,78 +1622,78 @@ get_hash_id:
 	.string	"http://%s%s"
 	.text
 .Letext0:
-	.file 6 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/int-ll64.h"
-	.file 7 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/int-ll64.h"
-	.file 8 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/posix_types.h"
-	.file 9 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/types.h"
-	.file 10 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/capability.h"
-	.file 11 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/thread_info.h"
-	.file 12 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/linux/time.h"
-	.file 13 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/compat.h"
-	.file 14 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/sched.h"
-	.file 15 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/uapi/asm/ptrace.h"
-	.file 16 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/spinlock_types.h"
-	.file 17 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/spinlock_types.h"
-	.file 18 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/fpsimd.h"
-	.file 19 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/processor.h"
-	.file 20 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/atomic-long.h"
-	.file 21 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/seqlock.h"
-	.file 22 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/plist.h"
-	.file 23 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cpumask.h"
-	.file 24 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/wait.h"
-	.file 25 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/completion.h"
-	.file 26 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/ktime.h"
-	.file 27 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rbtree.h"
-	.file 28 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/nodemask.h"
-	.file 29 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/osq_lock.h"
-	.file 30 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rwsem.h"
-	.file 31 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mm_types.h"
-	.file 32 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/pgtable-types.h"
-	.file 33 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/mmu.h"
-	.file 34 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/uprobes.h"
-	.file 35 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/cputime_jiffies.h"
-	.file 36 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/llist.h"
-	.file 37 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/smp.h"
-	.file 38 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/uidgid.h"
-	.file 39 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/signal.h"
-	.file 40 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/signal-defs.h"
-	.file 41 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/siginfo.h"
-	.file 42 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/signal.h"
-	.file 43 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/pid.h"
-	.file 44 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mmzone.h"
-	.file 45 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mutex.h"
-	.file 46 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/workqueue.h"
-	.file 47 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/seccomp.h"
-	.file 48 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/linux/resource.h"
-	.file 49 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/timerqueue.h"
-	.file 50 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/timer.h"
-	.file 51 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/hrtimer.h"
-	.file 52 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/task_io_accounting.h"
-	.file 53 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/assoc_array.h"
-	.file 54 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/key.h"
-	.file 55 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cred.h"
-	.file 56 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/idr.h"
-	.file 57 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu-refcount.h"
-	.file 58 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rcu_sync.h"
-	.file 59 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu-rwsem.h"
-	.file 60 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cgroup-defs.h"
-	.file 61 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/kernfs.h"
-	.file 62 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/bitops/builtin-__fls.h"
-	.file 63 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/bitops/fls64.h"
-	.file 64 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/log2.h"
-	.file 65 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/getorder.h"
-	.file 66 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/cachetype.h"
-	.file 67 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/printk.h"
-	.file 68 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/kernel.h"
-	.file 69 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/thread_info.h"
-	.file 70 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/hwcap.h"
-	.file 71 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/cpufeature.h"
-	.file 72 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jiffies.h"
-	.file 73 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/memory.h"
-	.file 74 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/highuid.h"
-	.file 75 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu_counter.h"
-	.file 76 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jump_label.h"
-	.file 77 "/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/string.h"
+	.file 6 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/int-ll64.h"
+	.file 7 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/int-ll64.h"
+	.file 8 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/posix_types.h"
+	.file 9 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/types.h"
+	.file 10 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/capability.h"
+	.file 11 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/thread_info.h"
+	.file 12 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/linux/time.h"
+	.file 13 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/compat.h"
+	.file 14 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/sched.h"
+	.file 15 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/uapi/asm/ptrace.h"
+	.file 16 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/spinlock_types.h"
+	.file 17 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/spinlock_types.h"
+	.file 18 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/fpsimd.h"
+	.file 19 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/processor.h"
+	.file 20 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/atomic-long.h"
+	.file 21 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/seqlock.h"
+	.file 22 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/plist.h"
+	.file 23 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cpumask.h"
+	.file 24 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/wait.h"
+	.file 25 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/completion.h"
+	.file 26 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/ktime.h"
+	.file 27 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rbtree.h"
+	.file 28 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/nodemask.h"
+	.file 29 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/osq_lock.h"
+	.file 30 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rwsem.h"
+	.file 31 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mm_types.h"
+	.file 32 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/pgtable-types.h"
+	.file 33 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/mmu.h"
+	.file 34 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/uprobes.h"
+	.file 35 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/cputime_jiffies.h"
+	.file 36 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/llist.h"
+	.file 37 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/smp.h"
+	.file 38 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/uidgid.h"
+	.file 39 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/signal.h"
+	.file 40 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/signal-defs.h"
+	.file 41 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/asm-generic/siginfo.h"
+	.file 42 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/signal.h"
+	.file 43 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/pid.h"
+	.file 44 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mmzone.h"
+	.file 45 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/mutex.h"
+	.file 46 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/workqueue.h"
+	.file 47 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/seccomp.h"
+	.file 48 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/uapi/linux/resource.h"
+	.file 49 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/timerqueue.h"
+	.file 50 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/timer.h"
+	.file 51 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/hrtimer.h"
+	.file 52 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/task_io_accounting.h"
+	.file 53 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/assoc_array.h"
+	.file 54 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/key.h"
+	.file 55 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cred.h"
+	.file 56 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/idr.h"
+	.file 57 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu-refcount.h"
+	.file 58 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/rcu_sync.h"
+	.file 59 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu-rwsem.h"
+	.file 60 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/cgroup-defs.h"
+	.file 61 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/kernfs.h"
+	.file 62 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/bitops/builtin-__fls.h"
+	.file 63 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/bitops/fls64.h"
+	.file 64 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/log2.h"
+	.file 65 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/asm-generic/getorder.h"
+	.file 66 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/cachetype.h"
+	.file 67 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/printk.h"
+	.file 68 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/kernel.h"
+	.file 69 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/thread_info.h"
+	.file 70 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/hwcap.h"
+	.file 71 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/cpufeature.h"
+	.file 72 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jiffies.h"
+	.file 73 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/memory.h"
+	.file 74 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/highuid.h"
+	.file 75 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/percpu_counter.h"
+	.file 76 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/include/linux/jump_label.h"
+	.file 77 "/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/arch/arm64/include/asm/string.h"
 	.section	.debug_info,"",%progbits
 .Ldebug_info0:
 	.4byte	0x55f4
@@ -6889,30 +6889,30 @@ get_hash_id:
 	.uleb128 0xc
 	.byte	0x10
 	.byte	0x36
-	.byte	0xbc
+	.byte	0xbd
 	.4byte	0x2abc
 	.uleb128 0xd
 	.4byte	.LASF618
 	.byte	0x36
-	.byte	0xbd
+	.byte	0xbe
 	.4byte	0x2a24
 	.byte	0
 	.uleb128 0xd
 	.4byte	.LASF619
 	.byte	0x36
-	.byte	0xbe
+	.byte	0xbf
 	.4byte	0x197
 	.byte	0x8
 	.byte	0
 	.uleb128 0x13
 	.byte	0x18
 	.byte	0x36
-	.byte	0xba
+	.byte	0xbb
 	.4byte	0x2ad5
 	.uleb128 0x14
 	.4byte	.LASF628
 	.byte	0x36
-	.byte	0xbb
+	.byte	0xbc
 	.4byte	0x29ee
 	.uleb128 0x21
 	.4byte	0x2a9b
@@ -6920,37 +6920,37 @@ get_hash_id:
 	.uleb128 0xc
 	.byte	0x20
 	.byte	0x36
-	.byte	0xc8
+	.byte	0xc9
 	.4byte	0x2af6
 	.uleb128 0xd
 	.4byte	.LASF629
 	.byte	0x36
-	.byte	0xca
+	.byte	0xcb
 	.4byte	0x27e
 	.byte	0
 	.uleb128 0xd
 	.4byte	.LASF630
 	.byte	0x36
-	.byte	0xcb
+	.byte	0xcc
 	.4byte	0x29a1
 	.byte	0x10
 	.byte	0
 	.uleb128 0x13
 	.byte	0x20
 	.byte	0x36
-	.byte	0xc6
+	.byte	0xc7
 	.4byte	0x2b1a
 	.uleb128 0x14
 	.4byte	.LASF631
 	.byte	0x36
-	.byte	0xc7
+	.byte	0xc8
 	.4byte	0x2a2a
 	.uleb128 0x21
 	.4byte	0x2ad5
 	.uleb128 0x14
 	.4byte	.LASF632
 	.byte	0x36
-	.byte	0xcd
+	.byte	0xce
 	.4byte	0x54
 	.byte	0
 	.uleb128 0x2e
@@ -14254,8 +14254,8 @@ get_hash_id:
 	.string	"_status"
 .LASF801:
 	.string	"cpu_itimer"
-.LASF1061:
-	.string	"/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/drivers/huawei_platform/net/hw_netfilter/nf_hw_common.c"
+.LASF352:
+	.string	"frozen"
 .LASF106:
 	.string	"sched_info"
 .LASF489:
@@ -14302,8 +14302,6 @@ get_hash_id:
 	.string	"objects"
 .LASF671:
 	.string	"nr_busy"
-.LASF1062:
-	.string	"/cloud/jenkins2/workspace/chipset_component_patch/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/out"
 .LASF714:
 	.string	"e_csets"
 .LASF894:
@@ -14350,6 +14348,8 @@ get_hash_id:
 	.string	"vip_depth"
 .LASF268:
 	.string	"cpumask_var_t"
+.LASF1061:
+	.string	"/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/kernel/drivers/huawei_platform/net/hw_netfilter/nf_hw_common.c"
 .LASF261:
 	.string	"seqlock_t"
 .LASF673:
@@ -14456,6 +14456,8 @@ get_hash_id:
 	.string	"rb_left"
 .LASF651:
 	.string	"fsgid"
+.LASF1062:
+	.string	"/mnt/disk/jenkins/ci/workspace/chipset_CHICAGO_C10_docker/opensource/component_code/vendor/huawei/extra/build/build_script/kirin_kernel_release/out"
 .LASF178:
 	.string	"alloc_lock"
 .LASF147:
@@ -14556,8 +14558,6 @@ get_hash_id:
 	.string	"nr_leaves_on_tree"
 .LASF797:
 	.string	"sighand_struct"
-.LASF352:
-	.string	"frozen"
 .LASF473:
 	.string	"level"
 .LASF477:

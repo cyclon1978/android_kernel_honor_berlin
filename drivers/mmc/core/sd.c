@@ -1513,7 +1513,6 @@ static int mmc_sd_reset(struct mmc_host *host)
 }
 #endif
 
-#ifdef CONFIG_SD_SDIO_CRC_RETUNING
 /*After power up sd card,try to reinit sd card in mmc_sd_power_restore*/
 static int mmc_sd_power_restore(struct mmc_host *host)
 {
@@ -1525,13 +1524,12 @@ static int mmc_sd_power_restore(struct mmc_host *host)
 
 	return ret;
 }
-#endif
 
 static const struct mmc_bus_ops mmc_sd_ops = {
 #ifdef CONFIG_SD_SDIO_CRC_RETUNING
 	.mmc_retuning = mmc_retuning,
-	.power_restore = mmc_sd_power_restore,
 #endif
+	.power_restore = mmc_sd_power_restore,
 	.remove = mmc_sd_remove,
 	.detect = mmc_sd_detect,
 	.runtime_suspend = mmc_sd_runtime_suspend,

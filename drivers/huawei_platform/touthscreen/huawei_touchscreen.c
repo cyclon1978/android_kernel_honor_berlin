@@ -52,6 +52,8 @@
 static struct mutex easy_wake_guesure_lock;
 
 #define	EDGE_WIDTH_DEFAULT	10
+#define BUFFER1_LEN  6
+#define BUFFER2_LEN  50
 
 #if defined (CONFIG_HUAWEI_DSM)
 static struct dsm_dev dsm_tp = {
@@ -2461,16 +2463,16 @@ static ssize_t ts_rawdata_debug_test_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
-	int index;
-	int index1;
+	int index = 0;
+	int index1 = 0;
 	int count = 0;
 	short row_size = 0;
 	int range_size = 0;
 	int error = NO_ERR;
 	struct ts_cmd_node *cmd = NULL;
 	struct ts_diff_data_info *info = NULL;
-	char buffer1[6];
-	char buffer2[50];
+	char buffer1[BUFFER1_LEN] = { 0 };
+	char buffer2[BUFFER2_LEN] = { 0 };
 
 	TS_LOG_INFO("ts_rawdata_debug_test_show called\n");
 
@@ -2513,6 +2515,10 @@ static ssize_t ts_rawdata_debug_test_show(struct device *dev,
 	count = count + 42;
 
 	row_size = info->buff[0];
+	if ((row_size <= 0) || (info->used_size) <= 0){
+		TS_LOG_ERR("%s data error! DO NOT surport this mode!", __func__);
+		goto out;
+	}
 	range_size = info->buff[1];
 	sprintf(buffer2, "rx: %d, tx : %d\n ", row_size, range_size);
 	strncat(buf, buffer2, strlen(buffer2));

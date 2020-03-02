@@ -269,7 +269,7 @@ void ts_report_pen(struct ts_cmd_node* in_cmd, struct ts_cmd_node* out_cmd)
 	int id = 0;
 	int key_value = 0;
 
-	if(!in_cmd || !out_cmd){
+	if(!in_cmd || !out_cmd || !input){
 		TS_LOG_ERR("parameters is null!\n", __func__);
 		return;
 	}

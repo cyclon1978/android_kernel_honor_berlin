@@ -47,6 +47,10 @@
 extern FSC_BOOL                 g_Idle;                                         // Puts state machine into Idle state
 extern TIMER                  PolicyStateTimer;                               // Multi-function timer for the different policy states
 
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern int                    support_smart_holder;
+#endif
+
 #ifdef FSC_DEBUG
 // Debugging Variables
 extern volatile FSC_U16         Timer_S;                                        // Tracks seconds elapsed for log timestamp
@@ -232,7 +236,18 @@ void ProtocolGetRxPacket(void)
         return;
     }
 	if (rx_sop == SOP_TYPE_SOP1)
-        goto blah;
+#ifdef FSC_HAVE_CUSTOM_SRC2
+        {
+            if (support_smart_holder)
+            {
+                ProtocolMsgRx = TRUE;                               // Set the flag to pass the message to the policy engine
+                ProtocolMsgRxSop = rx_sop;
+            }
+#endif
+            goto blah;
+#ifdef FSC_HAVE_CUSTOM_SRC2
+        }
+#endif
 
     if ((PolicyRxHeader.NumDataObjects == 0) && (PolicyRxHeader.MessageType == CMTSoftReset))
     {
@@ -608,6 +623,33 @@ void ProtocolSendHardReset(void)
     StoreUSBPDToken(TRUE, pdtHardReset);                                        // Store the hard reset
 #endif // FSC_DEBUG
 }
+
+#ifdef FSC_HAVE_CUSTOM_SRC2
+#define  Control3 3
+void ProtocolSendCableReset(void)
+{
+    Registers.Control.N_RETRIES = 0;
+    DeviceWrite(regControl3, 1, &Registers.Control.byte[Control3]);
+    ProtocolTxBytes = 0;
+    /* to reg FIFOs, End with TXOFF*/
+    ProtocolTxBuffer[ProtocolTxBytes++] = RESET1;
+    ProtocolTxBuffer[ProtocolTxBytes++] = SYNC1_TOKEN;
+    ProtocolTxBuffer[ProtocolTxBytes++] = RESET1;
+    ProtocolTxBuffer[ProtocolTxBytes++] = SYNC3_TOKEN;
+    ProtocolTxBuffer[ProtocolTxBytes++] = TXOFF;
+    if(ProtocolTxBytes <= FSC_PROTOCOL_BUFFER_SIZE) {
+	DeviceWrite(regFIFO, ProtocolTxBytes,&ProtocolTxBuffer[0]);
+    }
+    else {
+	FSC_PRINT("FUSB %s ERROR: TxBuffer is full\n", __func__);
+	return;
+    }
+    /* Start the transmission */
+    Registers.Control.TX_START = 1;
+    DeviceWrite(regControl0, 1,&Registers.Control.byte[0]);
+    Registers.Control.TX_START = 0;
+}
+#endif
 
 void ProtocolFlushRxFIFO(void)
 {

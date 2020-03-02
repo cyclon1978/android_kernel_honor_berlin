@@ -493,7 +493,7 @@ void platform_notify_data_role(FSC_BOOL PolicyIsDFP)
 {
 	// Optional: Notify platform of data role change
     struct pd_dpm_swap_state swap_state;
-	swap_state.new_role = (sourceOrSink == SOURCE) ? PD_ROLE_DFP : PD_ROLE_UFP;
+    swap_state.new_role = (PolicyIsDFP) ? PD_ROLE_DFP : PD_ROLE_UFP;
     pd_dpm_handle_pe_event(PD_DPM_PE_EVT_DR_SWAP, (void *)&swap_state);
 }
 
@@ -698,6 +698,18 @@ FSC_BOOL platform_get_dp_enabled(void)
     return chip->dp_enabled;
 }
 
+FSC_BOOL platform_get_pr_swap_wa_enabled(void)
+{
+    struct fusb30x_chip* chip = NULL;
+    chip = fusb30x_GetChip();
+    if (!chip)
+    {
+        pr_err("FUSB  %s - Error: Chip structure is NULL!\n", __func__);
+        return 0;
+    }
+    return chip->pr_swap_wa;
+}
+
 FSC_BOOL platform_get_product_type_ama(void)
 {
     struct fusb30x_chip* chip = NULL;
@@ -730,3 +742,14 @@ void platform_double_56k_cable(void)
     FSC_PRINT("FUSB %s Enter\n", __func__);
     pd_dpm_handle_pe_event(PD_DPM_PE_EVT_TYPEC_STATE, &typec_state);
 }
+
+#ifdef FSC_HAVE_CUSTOM_SRC2
+void platform_double_22k_cable(void)
+{
+    struct pd_dpm_typec_state typec_state = {
+		.new_state = PD_DPM_TYPEC_ATTACHED_CUSTOM_SRC2,
+    };
+    FSC_PRINT("FUSB %s Enter\n", __func__);
+    pd_dpm_handle_pe_event(PD_DPM_PE_EVT_TYPEC_STATE, &typec_state);
+}
+#endif

@@ -101,6 +101,10 @@ enum pd_typec_attach_type {
 #ifdef CONFIG_DPM_TYPEC_CAP_CUSTOM_SRC
 	PD_DPM_TYPEC_ATTACHED_CUSTOM_SRC,		/* Same Rp */
 #endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
+
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	PD_DPM_TYPEC_ATTACHED_CUSTOM_SRC2,
+#endif
 };
 
 enum pd_dpm_cable_event_type {
@@ -247,6 +251,13 @@ struct cc_check_ops {
 	int (*is_cable_for_direct_charge)(void);
 };
 int cc_check_ops_register(struct cc_check_ops*);
+
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+struct cable_vdo_ops {
+	int (*is_cust_src2_cable)(void);
+};
+int pd_dpm_cable_vdo_ops_register(struct cable_vdo_ops *);
+#endif
 
 /* for chip layer to get class created by core layer */
 struct class *hw_pd_get_class(void);

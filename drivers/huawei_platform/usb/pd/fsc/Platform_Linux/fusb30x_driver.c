@@ -36,6 +36,11 @@
 #ifdef CONFIG_POGO_PIN
 #include <huawei_platform/usb/huawei_pogopin.h>
 #endif
+
+#ifdef FSC_HAVE_CUSTOM_SRC2
+extern FSC_BOOL                huawei_emarker_detected_;
+extern int                     support_smart_holder;
+#endif
 /******************************************************************************
 * Driver functions
 ******************************************************************************/
@@ -139,6 +144,16 @@ int fusb30x_get_cc_mode(void)
 struct cc_corrosion_ops fusb30x_corrosion_ops = {
     .set_cc_mode = fusb30x_set_cc_mode,
     .get_cc_mode = fusb30x_get_cc_mode,
+};
+#endif
+
+#ifdef FSC_HAVE_CUSTOM_SRC2
+int fusb302_is_cust_src2_cable(void)
+{
+	return huawei_emarker_detected_;
+}
+struct cable_vdo_ops fusb302_cable_vdo_ops = {
+	.is_cust_src2_cable = fusb302_is_cust_src2_cable,
 };
 #endif
 
@@ -251,6 +266,10 @@ static int fusb30x_probe (struct i2c_client* client,
 #endif
 #ifdef CONFIG_POGO_PIN
 	cc_detect_register_ops(&fusb30x_cc_detect_ops);
+#endif
+#ifdef FSC_HAVE_CUSTOM_SRC2
+	if (support_smart_holder)
+		pd_dpm_cable_vdo_ops_register(&fusb302_cable_vdo_ops);
 #endif
 #ifdef FSC_DEBUG
     /* Initialize debug sysfs file accessors */

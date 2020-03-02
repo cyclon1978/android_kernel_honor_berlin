@@ -535,6 +535,7 @@ struct rpc_platform_data {
 	uint16_t table[32];
 	uint16_t mask[32];
 	uint16_t default_value;
+	uint8_t  rpc_close_flag;
 };
 typedef struct {
 	uint16_t sub_cmd;

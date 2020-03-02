@@ -134,6 +134,7 @@ struct nv_item_map {
 /*nv range list which allow to write */
 static struct nv_item_map nv_map[] = {
     {0, 10000},
+    {16096, 16140},
     {30000, 32500},
     {48000, 55000}
 };
@@ -625,7 +626,7 @@ static int parse_wirte_file(struct madapt_file_stru *file)
 	set_fs(KERNEL_DS);
 
 	size = fp->f_path.dentry->d_inode->i_size;
-	if (size == 0 || size >= MADAPT_FILE_MAX_SIZE) {
+	if (size <= 0 || size >= MADAPT_FILE_MAX_SIZE) {
 		hwlog_err("parse_wirte_file, file size(%d) error!\n", size);
 		ret = BSP_ERR_MADAPT_FILE_SIZE_ERR;
 		goto FILE_PROC_OUT;

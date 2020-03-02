@@ -66,7 +66,7 @@ static const u32 rt9466_wdt[] = {
 /* Register 0x01 ~ 0x10 */
 static u8 reset_reg_data[] = {
 		0x10, 0x03, 0x23, 0x3C, 0x67, 0x0B, 0x4C, 0xA1,
-		0x3C, 0x58, 0x2C, 0x02, 0x52, 0x05, 0x00, 0x10
+		0x3C, 0x58, 0x2C, 0x82, 0x52, 0x05, 0x00, 0x10
 };
 
 enum rt9466_irq_idx {
@@ -2373,7 +2373,7 @@ static int rt9466_get_register_head(char *reg_head)
 
 	memset(reg_head, 0, CHARGELOG_SIZE);
 	for (i = 0; i < ARRAY_SIZE(rt9466_reg_addr); i++) {
-		snprintf(buff, 26, "Reg[0x%2x] ", i);
+		snprintf(buff, 26, "Reg[0x%2x] ", rt9466_reg_addr[i]);
 		strncat(reg_head, buff, strlen(buff));
 	}
 	return 0;
@@ -2574,20 +2574,6 @@ static int rt9466_sw_reset(struct rt9466_info *info)
 
 	dev_info(info->dev, "%s\n", __func__);
 
-	/* Check pwr_rdy and opa_mode */
-	ret = rt9466_get_adc(info, RT9466_ADC_VBUS_DIV5, &adc_vbus);
-	if (ret < 0)
-		dev_err(info->dev, "%s, rt9466 get vbus fail\n", __func__);
-	ret = rt9466_i2c_test_bit(info, RT9466_REG_CHG_CTRL1,
-				RT9466_SHIFT_OPA_MODE, &opa_mode);
-	if (ret < 0)
-		dev_err(info->dev, "%s, rt9466 i2c test bit fail\n", __func__);
-	if ((adc_vbus < VBUS_THRESHOLD) && !opa_mode)
-		ret = rt9466_enable_hz(true);
-	else
-		ret = rt9466_enable_hz(false);
-	if (ret < 0)
-		dev_err(info->dev, "%s, operate hiz fail\n", __func__);
 	/* Disable auto sensing/Enable HZ,ship mode of secondary charger */
 	if (strcmp(info->desc->chg_name, "secondary_chg") == 0) {
 		mutex_lock(&info->hidden_mode_lock);
@@ -2618,6 +2604,21 @@ static int rt9466_sw_reset(struct rt9466_info *info)
 	if (ret < 0)
 		dev_err(info->dev, "%s: reset registers fail\n", __func__);
 	mutex_unlock(&info->io_lock);
+
+	/* Check pwr_rdy and opa_mode */
+	ret = rt9466_get_adc(info, RT9466_ADC_VBUS_DIV5, &adc_vbus);
+	if (ret < 0)
+		dev_err(info->dev, "%s, rt9466 get vbus fail\n", __func__);
+	ret = rt9466_i2c_test_bit(info, RT9466_REG_CHG_CTRL1,
+				RT9466_SHIFT_OPA_MODE, &opa_mode);
+	if (ret < 0)
+		dev_err(info->dev, "%s, rt9466 i2c test bit fail\n", __func__);
+	if ((adc_vbus < VBUS_THRESHOLD) && !opa_mode)
+		ret = rt9466_enable_hz(true);
+	else
+		ret = rt9466_enable_hz(false);
+	if (ret < 0)
+		dev_err(info->dev, "%s, operate hiz fail\n", __func__);
 
 	return ret;
 }
@@ -2679,6 +2680,10 @@ static int rt9466_init_setting(struct rt9466_info *info)
 	ret = rt9466_enable_te(desc->en_te);
 	if (ret < 0)
 		dev_err(info->dev, "%s: set te fail\n", __func__);
+
+	ret = rt9466_enable_safety_timer(info, false);
+	if (ret < 0)
+		dev_err(info->dev, "%s: disable chg timer fail\n", __func__);
 
 	ret = rt9466_set_safety_timer(info, desc->safety_timer);
 	if (ret < 0)

@@ -25,6 +25,7 @@ export LC_COLLATE LC_NUMERIC
 unexport GREP_OPTIONS
 TARGET_BUILD_VARIANT := user
 export TARGET_BUILD_VARIANT
+export secdog=rsa2048
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.

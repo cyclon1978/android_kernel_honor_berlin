@@ -217,6 +217,25 @@ int tcpm_typec_change_role(
 }
 
 #ifdef CONFIG_USB_POWER_DELIVERY
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+bool tcpm_inquire_cust_src2_cable_vdo(
+        struct tcpc_device *tcpc_dev, uint32_t *vdos, int size)
+{
+	if(!tcpc_dev){
+		return false;
+	}
+	pd_port_t *pd_port = &tcpc_dev->pd_port;
+
+	if (size < VDO_MAX_SIZE){
+		return false;
+	}
+	mutex_lock(&pd_port->pd_lock);
+	memcpy(vdos, pd_port->cable_vdos,
+		sizeof(uint32_t) * VDO_MAX_SIZE);
+	mutex_unlock(&pd_port->pd_lock);
+	return true;
+}
+#endif /* CONFIG_TYPEC_CAP_CUSTOM_SRC2 */
 
 bool tcpm_inquire_pd_connected(
 	struct tcpc_device *tcpc_dev)

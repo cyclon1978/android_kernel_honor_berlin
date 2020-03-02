@@ -122,4 +122,5 @@ int hisi_bci_show_capacity(void);
 struct class *hw_power_get_class(void);
 struct dsm_client *get_battery_dclient(void);
 extern enum fcp_check_stage_type  fcp_get_stage_status(void);
+extern unsigned int get_bci_soc(void);
 #endif

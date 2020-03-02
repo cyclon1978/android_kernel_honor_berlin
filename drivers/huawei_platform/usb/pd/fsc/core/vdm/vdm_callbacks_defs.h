@@ -55,6 +55,9 @@ typedef FSC_BOOL (*EnterModeResult)(FSC_BOOL success, FSC_U16 svid, FSC_U32 mode
 typedef void (*ExitModeResult)(FSC_BOOL success, FSC_U16 svid, FSC_U32 mode_index);
 
 typedef void (*InformIdentity)(FSC_BOOL success, SopType sop, Identity id);
+#ifdef FSC_HAVE_CUSTOM_SRC2
+typedef void (*InformCustSrc2CableVdo)(FSC_BOOL success, SopType sop, Identity id, FSC_U32* raw_data);
+#endif
 
 typedef void (*InformSvids)(FSC_BOOL success, SopType sop, SvidInfo svid_info);
 

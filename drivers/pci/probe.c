@@ -1210,8 +1210,13 @@ int pci_setup_device(struct pci_dev *dev)
 	dev->revision = class & 0xff;
 	dev->class = class >> 8;		    /* upper 3 bytes */
 
+#ifdef CONFIG_PCIE_KIRIN
+	dev_printk(KERN_DEBUG, &dev->dev, "type %02x class %#08x\n",
+		   dev->hdr_type, dev->class);
+#else
 	dev_printk(KERN_DEBUG, &dev->dev, "[%04x:%04x] type %02x class %#08x\n",
 		   dev->vendor, dev->device, dev->hdr_type, dev->class);
+#endif
 
 	/* need to have dev->class ready */
 	dev->cfg_size = pci_cfg_space_size(dev);

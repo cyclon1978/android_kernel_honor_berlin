@@ -1712,15 +1712,18 @@ decoder_PictureDecoded(
                     else
                     {
                         // If the decoded picture is not processed just destroy the containing picture.
-                        ui32Result = decoder_PictureDestroy(psDecStrCtx,
+                        if (psReleasePict->psPicture != IMG_NULL)
+                        {
+                            ui32Result = decoder_PictureDestroy(psDecStrCtx,
                                                             GET_STREAM_PICTURE_ID(psBufCtrl->aui32ReleaseList[i]),
                                                             IMG_FALSE);
-                        IMG_ASSERT(ui32Result == IMG_SUCCESS);
-                        if (ui32Result != IMG_SUCCESS)
-                        {
-                            return ui32Result;
+                            IMG_ASSERT(ui32Result == IMG_SUCCESS);
+                            if (ui32Result != IMG_SUCCESS)
+                            {
+                                return ui32Result;
+                            }
+                            psReleasePict->psPicture = IMG_NULL;
                         }
-                        psReleasePict->psPicture = IMG_NULL;
                     }
                 }
                 else

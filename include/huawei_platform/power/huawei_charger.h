@@ -149,10 +149,21 @@
 #define MIN_ADAPTOR_TEST_INS_NUM    (0)
 #define MAX_ADAPTOR_TEST_INS_NUM    (5)
 
+#define CHARGER_SET_DISABLE_FLAGS           1
+#define CHARGER_CLEAR_DISABLE_FLAGS         0
 /* vbus valid check timeout on powerdown charging  */
 #define VBUS_VALID_CHECK_WORK_TIMEOUT  (3000)
 
+#define CCAFC_PATTERN_SIZE     (6)
+#define CCAFC_STRING_LENGTH    (72)
+#define CCAFC_STRING_SPACE_NUM (18)
+#define CCAFC_CURRENT_LOCATION (6)
+#define CCAFC_VOLTAGE_LOCATION (12)
 /*************************struct define area***************************/
+enum charger_charging_event {
+	CHARGER_START_CHARGING_EVENT = 0,
+	CHARGER_STOP_CHARGING_EVENT,
+};
 enum usb_charger_type {
 	CHARGER_TYPE_USB = 0,	/*SDP*/
 	CHARGER_TYPE_BC_USB,	/*CDP*/
@@ -217,6 +228,10 @@ enum charge_sysfs_type {
 	CHARGE_SYSFS_ADAPTOR_TEST,
 	CHARGE_SYSFS_ADAPTOR_VOLTAGE,
 };
+enum cca_sysfs_type {
+        CCA_SYSFS_CCA_CHARGE_PATTERN = 0,
+        CCA_SYSFS_CCA_CCCV_SAMPLE,
+};
 enum charge_done_type {
 	CHARGE_DONE_NON = 0,
 	CHARGE_DONE,
@@ -247,6 +262,11 @@ enum fcp_test_result{
     FCP_NOT_SUPPORT,
 };
 
+enum disable_charger_type {
+	CHARGER_SYS_NODE = 0,
+	CHARGER_FATAL_ISC_TYPE,
+	__MAX_DISABLE_CHAGER,
+};
 static const char *const fcp_check_stage[] = {
 	[0] = "FCP_STAGE_DEFAUTL",
 	[1] = "FCP_STAGE_SUPPORT_DETECT",
@@ -280,6 +300,7 @@ struct charge_sysfs_data {
 	unsigned int charge_limit;
 	unsigned int wdt_disable;
 	unsigned int charge_enable;
+	unsigned int disable_charger[__MAX_DISABLE_CHAGER];
 	unsigned int batfet_disable;
 	unsigned int hiz_enable;
 	unsigned int vr_charger_type;
@@ -481,6 +502,13 @@ struct adaptor_test_attr{
 	enum test_state result;
 };
 
+/*fast charging pattern calculate by cca*/
+struct ccafc_charge_pattern {
+    int ccafc_current[CCAFC_PATTERN_SIZE];
+    int ccafc_voltage[CCAFC_PATTERN_SIZE];
+    int ccafc_mode[CCAFC_PATTERN_SIZE];
+};
+
 #ifdef CONFIG_LLT_TEST
 struct charge_static_ops {
 	void (*charge_wake_lock)(void);
@@ -551,6 +579,11 @@ void ignore_pluggin_and_pluggout_interrupt(void);
 void restore_pluggin_pluggout_interrupt(void);
 int get_direct_charge_flag(void);
 #endif
+extern int set_charger_disable_flags(int, int);
+extern struct blocking_notifier_head charger_event_notify_head;
 int charge_get_vbus(void);
+int is_ccafc_supported(int *flag);
+int get_ccafc_pattern(struct ccafc_charge_pattern *pattern);
+int get_ccafc_sample_status(void);
 
 #endif

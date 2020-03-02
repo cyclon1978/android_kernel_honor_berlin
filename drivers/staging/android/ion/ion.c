@@ -925,6 +925,8 @@ static int do_iommu_map(struct ion_buffer *buffer,
 		map->format.phys_page_line = format->phys_page_line;
 		map->format.virt_page_line = format->virt_page_line;
 		map->format.header_size = format->header_size;
+		kfree(map);
+		return -EINVAL;
 	}
 
 	/* do iommu map */

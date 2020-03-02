@@ -66,6 +66,9 @@ extern struct cc_anti_corrosion_dev *cc_corrosion_dev_p;
 #ifdef CONFIG_POGO_PIN
 #include <huawei_platform/usb/huawei_pogopin.h>
 #endif
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+extern int support_smart_holder;
+#endif
 #define RT1711H_DRV_VERSION	"1.1.5_Huawei"
 #ifdef CONFIG_CONTEXTHUB_PD
 extern void hw_pd_wait_dptx_ready(void);
@@ -1131,6 +1134,71 @@ static int rt1711_set_cc(struct tcpc_device *tcpc, int pull)
 
 	return 0;
 }
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+#define VID 0x12d1
+#define VID_INDEX 1
+#define VID_MASK 0x0ffff
+#define PID 0x3B20
+#define PID_INDEX 3
+#define PID_MASK 0x0ffff
+
+#define  ENABLE_DEBUG_DEVICE  1
+
+
+int is_smart_holder(uint32_t* vdos,int size)
+{
+	int i = 0;
+	if(!vdos)
+	{
+		return 0;
+	}
+
+	if((VID == (vdos[VID_INDEX] & (VID_MASK))) && (PID == ((vdos[PID_INDEX] >> 16) & (PID_MASK))) )
+	{
+		return 1;
+	}
+
+#ifdef ENABLE_DEBUG_DEVICE
+	for(i = 0; i < size; i++)
+	{
+		hwlog_info("vdos[%d]: 0x%x\n", i, vdos[i]);
+	}
+
+	if( (VID == (vdos[VID_INDEX] & (VID_MASK))) && ( 0 == (vdos[PID_INDEX] & (PID_MASK)))  )
+	{
+
+		return 1;
+	}
+#endif
+
+	return 0;
+}
+
+int tcpm_is_cust_src2_cable(void)
+{
+	uint32_t vdos[VDO_MAX_SIZE];
+	int ret;
+
+	memset(vdos, 0, VDO_MAX_SIZE);
+	ret = tcpm_inquire_cust_src2_cable_vdo(g_chip_for_reg_read->tcpc, vdos, VDO_MAX_SIZE);
+	if(ret)
+	{
+		if( is_smart_holder(vdos,VDO_MAX_SIZE) )
+		{
+			hwlog_info("this is smart holder");
+			return 1;
+		}
+	} else
+	{
+		hwlog_info("inquire vdo failed!\n");
+	}
+	return 0;
+}
+
+struct cable_vdo_ops rt1711h_cable_vdo_ops = {
+	.is_cust_src2_cable = tcpm_is_cust_src2_cable,
+};
+#endif
 
 #ifdef CONFIG_POGO_PIN
 static int tcpm_typec_detect_disable(bool disable)
@@ -1299,13 +1367,38 @@ static int rt1711_set_msg_header(
 static int rt1711_set_rx_enable(struct tcpc_device *tcpc, uint8_t enable)
 {
 	int ret = 0;
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	static bool last_change = false;
+	bool change = false;
+#endif
 
 	if (enable)
 		ret = rt1711h_set_clock_gating(tcpc, false);
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	if (support_smart_holder) {
+		if (enable & TCPC_RX_CAP_CUST_SRC2)
+		{
+			change = true;
+			rt1711_i2c_write16(tcpc, TCPC_V10_REG_ALERT_MASK, 0);
+		}
+		if (change ^ last_change) {
+			if (change)
+				rt1711_i2c_write16(tcpc, TCPC_V10_REG_ALERT_MASK, 0);
+			else
+				rt1711_init_alert_mask(tcpc);
+			last_change = change;
+		}
+	}
+#endif
+	if (ret == 0) {
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+		if (support_smart_holder)
+			ret = rt1711_i2c_write8(tcpc, TCPC_V10_REG_RX_DETECT, enable & ~TCPC_RX_CAP_CUST_SRC2);
+		else
+#endif
+			ret = rt1711_i2c_write8(tcpc, TCPC_V10_REG_RX_DETECT, enable);
 
-	if (ret == 0)
-		ret = rt1711_i2c_write8(tcpc, TCPC_V10_REG_RX_DETECT, enable);
-
+	}
 	if ((ret == 0) && (!enable))
 		ret = rt1711h_set_clock_gating(tcpc, true);
 
@@ -1765,6 +1858,9 @@ static int rt1711_i2c_probe(struct i2c_client *client,
 		goto err_irq_init;
 	}
 	pr_info("%s cc_check register OK!\n", __func__);
+#ifdef CONFIG_TYPEC_CAP_CUSTOM_SRC2
+	pd_dpm_cable_vdo_ops_register(&rt1711h_cable_vdo_ops);
+#endif
 	pr_info("%s probe OK!\n", __func__);
 	return 0;
 
