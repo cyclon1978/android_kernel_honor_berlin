@@ -415,7 +415,7 @@ void cgroup_pids_cancel_fork(void)
 	spin_unlock(&group_pids_lock);
 }
 
-static void pids_fork(struct task_struct *tsk,void **priv)
+static void pids_fork(struct task_struct *tsk,void *priv)
 {
 	spin_lock(&group_pids_lock);
 	if (current->group_pids) {
