@@ -1384,9 +1384,18 @@ clock_set:
 			return;
 		}
 		timeout--;
+#ifdef CONFIG_HISI_MMC
+		mdelay(1);
+#else
+		/*
+		* This function is called when the mobile phone is sr. However,
+		* the sr does not lock the functio. If the unlock is used,
+		* the mobile phone will panic.
+		*/
 		spin_unlock_irq(&host->lock);
 		usleep_range(900, 1100);
 		spin_lock_irq(&host->lock);
+#endif
 	}
 
 	clk |= SDHCI_CLOCK_CARD_EN;
