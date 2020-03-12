@@ -74,6 +74,9 @@ static char excludes[256] = ".globallauncher,tes.accubattery,chtype.swiftkey,m.a
 static unsigned long memory_available_min = 400000;
 static unsigned long memory_free_min = 32000;
 
+static unsigned long pressure_calls = 0;
+static unsigned long pressure_calls_executed = 0;
+
 int simple_lmk_calculate_adj(int adj, char *comm) {
 	if(strstr(excludes, comm) != NULL) {
 		return PROTECTED_APP_ADJ;
@@ -158,6 +161,11 @@ bool simple_lmk_decide_reclaim_on_memory_pressure(void) {
 	pr_info("result %u available %lu (%lu) free %lu (%lu)\n", result,
 		K(available), memory_available_min,
 		K(i.freeram), memory_free_min);
+
+	pressure_calls++;
+	if (result) {
+		pressure_calls_executed++;
+	}
 
 	return result;
 }
@@ -465,6 +473,16 @@ static const struct kernel_param_ops memory_free_min_param_ops = {
 	.set = param_set_ulong,
 	.get = param_get_ulong,
 };
+
+static const struct kernel_param_ops pressure_calls_param_ops = {
+	.set = param_set_ulong,
+	.get = param_get_ulong,
+};
+
+static const struct kernel_param_ops pressure_calls_executed_param_ops = {
+	.set = param_set_ulong,
+	.get = param_get_ulong,
+};
 #endif
 
 /* Needed to prevent Android from thinking there's no LMK and thus rebooting */
@@ -478,4 +496,8 @@ module_param_cb(available_min, &memory_available_min_param_ops, &memory_availabl
 		0644);
 module_param_cb(free_min, &memory_free_min_param_ops, &memory_free_min,
 		0644);
+module_param_cb(calls, &pressure_calls_param_ops, &pressure_calls,
+		0444);
+module_param_cb(calls_executed, &pressure_calls_executed_param_ops, &pressure_calls_executed,
+		0444);
 #endif
