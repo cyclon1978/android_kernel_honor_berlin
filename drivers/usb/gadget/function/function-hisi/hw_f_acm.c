@@ -1,19 +1,15 @@
 /*
- * hw_f_acm.c
+ * f_acm.c -- USB CDC serial (ACM) function driver
  *
- *  USB CDC serial (ACM) function driver
+ * Copyright (C) 2003 Al Borchers (alborchers@steinerpoint.com)
+ * Copyright (C) 2008 by David Brownell
+ * Copyright (C) 2008 by Nokia Corporation
+ * Copyright (C) 2009 by Samsung Electronics
+ * Author: Michal Nazarewicz (mina86@mina86.com)
  *
- * Copyright (c) 2012-2018 Huawei Technologies Co., Ltd.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
+ * This software is distributed under the terms of the GNU General
+ * Public License ("GPL") as published by the Free Software Foundation,
+ * either version 2 of that License or (at your option) any later version.
  */
 
 /* #define VERBOSE_DEBUG */
@@ -45,49 +41,48 @@
  */
 
 struct f_acm {
-	struct gserial port;
-	u8 ctrl_id, data_id;
-	u8 port_num;
+	struct gserial			port;
+	u8				ctrl_id, data_id;
+	u8				port_num;
 
-	u8 pending;
+	u8				pending;
 
-	/*
-	 * lock is mostly for pending and notify_req ... they get accessed
+	/* lock is mostly for pending and notify_req ... they get accessed
 	 * by callbacks both from tty (open/close/break) under its spinlock,
 	 * and notify_req.complete() which can't use that lock.
 	 */
-	spinlock_t lock;
+	spinlock_t			lock;
 
-	int support_notify;
+	int				support_notify;
 
-	struct usb_ep *notify;
-	struct usb_request *notify_req;
+	struct usb_ep			*notify;
+	struct usb_request		*notify_req;
 
 	int	(*pending_notify)(struct f_acm *acm);
 	/* cdc vendor flow control notify */
-	u32 rx_is_on;
-	u32 tx_is_on;
-	struct usb_cdc_line_coding port_line_coding; /* 8-N-1 etc */
+	u32				rx_is_on;
+	u32				tx_is_on;
+	struct usb_cdc_line_coding	port_line_coding;	/* 8-N-1 etc */
 
 	/* SetControlLineState request -- CDC 1.1 section 6.2.14 (INPUT) */
-	u16 port_handshake_bits;
+	u16				port_handshake_bits;
 
 	/* SerialState notification -- CDC 1.1 section 6.3.5 (OUTPUT) */
-	u16 serial_state;
-#define ACM_CTRL_BRK  (1 << 2)
-#define ACM_CTRL_DSR  (1 << 1)
-#define ACM_CTRL_DCD  (1 << 0)
+	u16				serial_state;
+#define ACM_CTRL_BRK		(1 << 2)
+#define ACM_CTRL_DSR		(1 << 1)
+#define ACM_CTRL_DCD		(1 << 0)
 };
 
 struct acm_name_type_tbl g_hw_acm_type_table[HW_MAX_U_SERIAL_PORTS] = {
-	/* name type(prot id) */
-	{"hw_acm_modem", USB_IF_PROTOCOL_HW_MODEM}, /* hw modem interface */
-	{"hw_acm_PCUI", USB_IF_PROTOCOL_HW_PCUI}, /* hw PCUI for AT command */
-	{"hw_acm_DIAG", USB_IF_PROTOCOL_HW_DIAG}, /* hw DIAG for USB update */
-	{"unknown", USB_IF_PROTOCOL_NOPNP}
+	/* name             type(prot id) */
+	{"hw_acm_modem",    USB_IF_PROTOCOL_HW_MODEM}, /* hw modem interface */
+	{"hw_acm_PCUI",     USB_IF_PROTOCOL_HW_PCUI},  /* hw PCUI for AT command */
+	{"hw_acm_DIAG",     USB_IF_PROTOCOL_HW_DIAG},  /* hw DIAG for USB update */
+	{"unknown",         USB_IF_PROTOCOL_NOPNP}
 };
 
-static int g_acm_is_single_interface = HW_ACM_IS_SINGLE;
+static int g_acm_is_single_interface = HW_ACM_IS_SINGLE ;
 
 static inline unsigned char ACM_GET_TYPE(struct f_acm *acm)
 {
@@ -107,107 +102,112 @@ static inline struct f_acm *port_to_acm(struct gserial *p)
 /*-------------------------------------------------------------------------*/
 
 /* notification endpoint uses smallish and infrequent fixed-size messages */
-#define GS_NOTIFY_INTERVAL_MS     (32)
-#define GS_NOTIFY_MAXPACKET       (10) /* notification + 2 bytes */
+
+#define GS_NOTIFY_INTERVAL_MS		32
+#define GS_NOTIFY_MAXPACKET		10	/* notification + 2 bytes */
 
 /* interface and class descriptors: */
-static struct usb_interface_assoc_descriptor acm_iad_descriptor = {
-	.bLength = sizeof(acm_iad_descriptor),
-	.bDescriptorType = USB_DT_INTERFACE_ASSOCIATION,
 
-	/* .bFirstInterface = DYNAMIC, */
-	.bInterfaceCount = 2, /* control + data */
-	.bFunctionClass = USB_CLASS_COMM,
-	.bFunctionSubClass = USB_CDC_SUBCLASS_ACM,
-	.bFunctionProtocol = USB_CDC_ACM_PROTO_AT_V25TER,
-	/* .iFunction = DYNAMIC */
+static struct usb_interface_assoc_descriptor
+acm_iad_descriptor = {
+	.bLength =		sizeof acm_iad_descriptor,
+	.bDescriptorType =	USB_DT_INTERFACE_ASSOCIATION,
+
+	/* .bFirstInterface =	DYNAMIC, */
+	.bInterfaceCount = 	2,	// control + data
+	.bFunctionClass =	USB_CLASS_COMM,
+	.bFunctionSubClass =	USB_CDC_SUBCLASS_ACM,
+	.bFunctionProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
+	/* .iFunction =		DYNAMIC */
 };
 
+
 static struct usb_interface_descriptor acm_control_interface_desc = {
-	.bLength = USB_DT_INTERFACE_SIZE,
-	.bDescriptorType = USB_DT_INTERFACE,
+	.bLength =		USB_DT_INTERFACE_SIZE,
+	.bDescriptorType =	USB_DT_INTERFACE,
 	/* .bInterfaceNumber = DYNAMIC */
-	.bNumEndpoints = 1,
-	.bInterfaceClass = USB_CLASS_COMM,
-	.bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
-	.bInterfaceProtocol = USB_CDC_ACM_PROTO_AT_V25TER,
+	.bNumEndpoints =	1,
+	.bInterfaceClass =	USB_CLASS_COMM,
+	.bInterfaceSubClass =	USB_CDC_SUBCLASS_ACM,
+	.bInterfaceProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
 	/* .iInterface = DYNAMIC */
 };
 
 static struct usb_interface_descriptor acm_data_interface_desc = {
-	.bLength = USB_DT_INTERFACE_SIZE,
-	.bDescriptorType = USB_DT_INTERFACE,
+	.bLength =		USB_DT_INTERFACE_SIZE,
+	.bDescriptorType =	USB_DT_INTERFACE,
 	/* .bInterfaceNumber = DYNAMIC */
-	.bNumEndpoints = 2,
-	.bInterfaceClass = USB_CLASS_CDC_DATA,
-	.bInterfaceSubClass = 0,
-	.bInterfaceProtocol = 0,
+	.bNumEndpoints =	2,
+	.bInterfaceClass =	USB_CLASS_CDC_DATA,
+	.bInterfaceSubClass =	0,
+	.bInterfaceProtocol =	0,
 	/* .iInterface = DYNAMIC */
 };
 
 static struct usb_cdc_header_desc acm_header_desc = {
-	.bLength = sizeof(acm_header_desc),
-	.bDescriptorType = USB_DT_CS_INTERFACE,
-	.bDescriptorSubType = USB_CDC_HEADER_TYPE,
-	.bcdCDC = cpu_to_le16(0x0110), /* cdc version */
+	.bLength =		sizeof(acm_header_desc),
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_HEADER_TYPE,
+	.bcdCDC =		cpu_to_le16(0x0110), /* cdc version */
 };
 
-static struct usb_cdc_call_mgmt_descriptor acm_call_mgmt_descriptor = {
-	.bLength = sizeof(acm_call_mgmt_descriptor),
-	.bDescriptorType = USB_DT_CS_INTERFACE,
-	.bDescriptorSubType = USB_CDC_CALL_MANAGEMENT_TYPE,
-	.bmCapabilities = 0,
+static struct usb_cdc_call_mgmt_descriptor
+acm_call_mgmt_descriptor = {
+	.bLength =		sizeof(acm_call_mgmt_descriptor),
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_CALL_MANAGEMENT_TYPE,
+	.bmCapabilities =	0,
 	/* .bDataInterface = DYNAMIC */
 };
 
 static struct usb_cdc_acm_descriptor acm_descriptor = {
-	.bLength = sizeof(acm_descriptor),
-	.bDescriptorType = USB_DT_CS_INTERFACE,
-	.bDescriptorSubType = USB_CDC_ACM_TYPE,
-	.bmCapabilities = USB_CDC_CAP_LINE,
+	.bLength =		sizeof(acm_descriptor),
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_ACM_TYPE,
+	.bmCapabilities =	USB_CDC_CAP_LINE,
 };
 
 static struct usb_cdc_union_desc acm_union_desc = {
-	.bLength = sizeof(acm_union_desc),
-	.bDescriptorType = USB_DT_CS_INTERFACE,
-	.bDescriptorSubType = USB_CDC_UNION_TYPE,
-	/* .bMasterInterface0 = DYNAMIC */
-	/* .bSlaveInterface0 = DYNAMIC */
+	.bLength =		sizeof(acm_union_desc),
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_UNION_TYPE,
+	/* .bMasterInterface0 =	DYNAMIC */
+	/* .bSlaveInterface0 =	DYNAMIC */
 };
 
 static struct usb_interface_descriptor acm_single_interface_desc = {
-	.bLength = USB_DT_INTERFACE_SIZE,
-	.bDescriptorType = USB_DT_INTERFACE,
-	/* .bInterfaceNumber = DYNAMIC */
-	/* .bNumEndpoints = DYNAMIC, */
-	.bInterfaceClass = HW_PNP21_CLASS,
-	.bInterfaceSubClass = HW_PNP21_SUBCLASS,
-	/* .bInterfaceProtocol = DYNAMIC, */
-	/* .iInterface = DYNAMIC */
+	.bLength =		USB_DT_INTERFACE_SIZE,
+	.bDescriptorType =	USB_DT_INTERFACE,
+	/* .bInterfaceNumber =	DYNAMIC */
+	/* .bNumEndpoints =	DYNAMIC, */
+	.bInterfaceClass =	HW_PNP21_CLASS,
+	.bInterfaceSubClass =	HW_PNP21_SUBCLASS,
+	/* .bInterfaceProtocol =	DYNAMIC, */
+	/* .iInterface =	DYNAMIC */
 };
-
 /* full speed support: */
+
 static struct usb_endpoint_descriptor acm_fs_notify_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bEndpointAddress = USB_DIR_IN,
-	.bmAttributes = USB_ENDPOINT_XFER_INT,
-	.wMaxPacketSize = cpu_to_le16(GS_NOTIFY_MAXPACKET),
-	.bInterval = GS_NOTIFY_INTERVAL_MS,
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_INT,
+	.wMaxPacketSize =	cpu_to_le16(GS_NOTIFY_MAXPACKET),
+	.bInterval =		GS_NOTIFY_INTERVAL_MS,
 };
 
 static struct usb_endpoint_descriptor acm_fs_in_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bEndpointAddress = USB_DIR_IN,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
 
 static struct usb_endpoint_descriptor acm_fs_out_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bEndpointAddress = USB_DIR_OUT,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_OUT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
 
 static struct usb_descriptor_header **acm_fs_cur_function;
@@ -250,26 +250,26 @@ static struct usb_descriptor_header *acm_fs_function[] = {
 
 /* high speed support: */
 static struct usb_endpoint_descriptor acm_hs_notify_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bEndpointAddress = USB_DIR_IN,
-	.bmAttributes = USB_ENDPOINT_XFER_INT,
-	.wMaxPacketSize = cpu_to_le16(GS_NOTIFY_MAXPACKET),
-	.bInterval = USB_MS_TO_HS_INTERVAL(GS_NOTIFY_INTERVAL_MS),
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_INT,
+	.wMaxPacketSize =	cpu_to_le16(GS_NOTIFY_MAXPACKET),
+	.bInterval =		USB_MS_TO_HS_INTERVAL(GS_NOTIFY_INTERVAL_MS),
 };
 
 static struct usb_endpoint_descriptor acm_hs_in_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize = cpu_to_le16(512),
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	cpu_to_le16(512),
 };
 
 static struct usb_endpoint_descriptor acm_hs_out_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize = cpu_to_le16(512),
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	cpu_to_le16(512),
 };
 
 static struct usb_descriptor_header **acm_hs_cur_function;
@@ -311,22 +311,22 @@ static struct usb_descriptor_header *acm_hs_function[] = {
 };
 
 static struct usb_endpoint_descriptor acm_ss_in_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize = cpu_to_le16(1024),
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	cpu_to_le16(1024),
 };
 
 static struct usb_endpoint_descriptor acm_ss_out_desc = {
-	.bLength = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType = USB_DT_ENDPOINT,
-	.bmAttributes = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize = cpu_to_le16(1024),
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	cpu_to_le16(1024),
 };
 
 static struct usb_ss_ep_comp_descriptor acm_ss_bulk_comp_desc = {
-	.bLength = sizeof(acm_ss_bulk_comp_desc),
-	.bDescriptorType = USB_DT_SS_ENDPOINT_COMP,
+	.bLength =              sizeof acm_ss_bulk_comp_desc,
+	.bDescriptorType =      USB_DT_SS_ENDPOINT_COMP,
 };
 
 static struct usb_descriptor_header *acm_ss_function[] = {
@@ -375,22 +375,24 @@ static struct usb_descriptor_header *acm_ss_function_single_notify[] = {
 	NULL,
 };
 
+
 /* string descriptors: */
-#define ACM_CTRL_IDX    (0)
-#define ACM_DATA_IDX    (1)
-#define ACM_IAD_IDX     (2)
+
+#define ACM_CTRL_IDX	0
+#define ACM_DATA_IDX	1
+#define ACM_IAD_IDX	2
 
 /* static strings, in UTF-8 */
 static struct usb_string acm_string_defs[] = {
 	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
 	[ACM_DATA_IDX].s = "CDC ACM Data",
-	[ACM_IAD_IDX].s = "CDC Serial",
-	{} /* end of list */
+	[ACM_IAD_IDX ].s = "CDC Serial",
+	{  } /* end of list */
 };
 
 static struct usb_gadget_strings acm_string_table = {
-	.language = 0x0409, /* en-us */
-	.strings = acm_string_defs,
+	.language =		0x0409,	/* en-us */
+	.strings =		acm_string_defs,
 };
 
 static struct usb_gadget_strings *acm_strings[] = {
@@ -400,34 +402,33 @@ static struct usb_gadget_strings *acm_strings[] = {
 
 /*-------------------------------------------------------------------------*/
 
-/*
- * ACM control ... data handling is delegated to tty library code.
+/* ACM control ... data handling is delegated to tty library code.
  * The main task of this function is to activate and deactivate
  * that code based on device state; track parameters like line
  * speed, handshake state, and so on; and issue notifications.
  */
+
 static void acm_complete_set_line_coding(struct usb_ep *ep,
-	struct usb_request *req)
+		struct usb_request *req)
 {
-	struct f_acm *acm = ep->driver_data;
+	struct f_acm	*acm = ep->driver_data;
 	struct usb_composite_dev *cdev = acm->port.func.config->cdev;
 
 	if (req->status != 0) {
 		DBG(cdev, "acm ttyGS%d completion, err %d\n",
-			acm->port_num, req->status);
+				acm->port_num, req->status);
 		return;
 	}
 
 	/* normal completion */
 	if (req->actual != sizeof(acm->port_line_coding)) {
 		DBG(cdev, "acm ttyGS%d short resp, len %d\n",
-			acm->port_num, req->actual);
+				acm->port_num, req->actual);
 		usb_ep_set_halt(ep);
 	} else {
-		struct usb_cdc_line_coding *value = req->buf;
+		struct usb_cdc_line_coding	*value = req->buf;
 
-		/*
-		 * REVISIT:  we currently just remember this data.
+		/* REVISIT:  we currently just remember this data.
 		 * If we change that, (a) validate it first, then
 		 * (b) update whatever hardware needs updating,
 		 * (c) worry about locking.  This is information on
@@ -437,30 +438,25 @@ static void acm_complete_set_line_coding(struct usb_ep *ep,
 		acm->port_line_coding = *value;
 	}
 }
-
 static void acm_complete_2102(struct usb_ep *ep,
-	struct usb_request *req)
+		struct usb_request *req)
 {
 }
-
 static void acm_complete_41a3(struct usb_ep *ep,
-	struct usb_request *req)
+		struct usb_request *req)
 {
 }
-
-static int acm_setup(struct usb_function *f,
-	const struct usb_ctrlrequest *ctrl)
+static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 {
-	struct f_acm *acm = func_to_acm(f);
+	struct f_acm		*acm = func_to_acm(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
-	struct usb_request *req = cdev->req;
-	int value = -EOPNOTSUPP;
-	u16 w_index = le16_to_cpu(ctrl->wIndex);
-	u16 w_value = le16_to_cpu(ctrl->wValue);
-	u16 w_length = le16_to_cpu(ctrl->wLength);
+	struct usb_request	*req = cdev->req;
+	int			value = -EOPNOTSUPP;
+	u16			w_index = le16_to_cpu(ctrl->wIndex);
+	u16			w_value = le16_to_cpu(ctrl->wValue);
+	u16			w_length = le16_to_cpu(ctrl->wLength);
 
-	/*
-	 * composite driver infrastructure handles everything except
+	/* composite driver infrastructure handles everything except
 	 * CDC class messages; interface activation uses set_alt().
 	 *
 	 * Note CDC spec table 4 lists the ACM request profile.  It requires
@@ -469,29 +465,28 @@ static int acm_setup(struct usb_function *f,
 	 * (not that useful) and SEND_BREAK.
 	 */
 	switch ((ctrl->bRequestType << 8) | ctrl->bRequest) {
-	case (((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8) |
-		USB_CDC_SET_COMM_FEATURE):
+
+	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+			| USB_CDC_SET_COMM_FEATURE:
 		pr_debug("@@@@ wValue: 0x%04x, wIndex: 0x%04x, wLength: 0x%04x\n",
 			w_value, w_index, w_length);
 		value = w_length;
 		cdev->gadget->ep0->driver_data = acm;
 		req->complete = acm_complete_2102;
 		break;
-
-	case (((USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE) << 8) |
-		USB_CDC_SEND_PORT_STATUS):
+	case ((USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE) << 8)
+			| USB_CDC_SEND_PORT_STATUS:
 		pr_debug("@@@@ wValue: 0x%04x, wIndex: 0x%04x, wLength: 0x%04x\n",
 			w_value, w_index, w_length);
 		value = w_length;
 		cdev->gadget->ep0->driver_data = acm;
 		req->complete = acm_complete_41a3;
 		break;
-
 	/* SET_LINE_CODING ... just read and save what the host sends */
-	case (((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8) |
-		USB_CDC_REQ_SET_LINE_CODING):
-		if (w_length != sizeof(struct usb_cdc_line_coding) ||
-			w_index != acm->ctrl_id)
+	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+			| USB_CDC_REQ_SET_LINE_CODING:
+		if (w_length != sizeof(struct usb_cdc_line_coding)
+				|| w_index != acm->ctrl_id)
 			goto invalid;
 
 		value = w_length;
@@ -500,26 +495,25 @@ static int acm_setup(struct usb_function *f,
 		break;
 
 	/* GET_LINE_CODING ... return what host sent, or initial value */
-	case (((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8) |
-		USB_CDC_REQ_GET_LINE_CODING):
+	case ((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+			| USB_CDC_REQ_GET_LINE_CODING:
 		if (w_index != acm->ctrl_id)
 			goto invalid;
 
-		value = min_t(unsigned int, w_length,
+		value = min_t(unsigned, w_length,
 				sizeof(struct usb_cdc_line_coding));
 		memcpy(req->buf, &acm->port_line_coding, value);
 		break;
 
 	/* SET_CONTROL_LINE_STATE ... save what the host sent */
-	case (((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8) |
-		USB_CDC_REQ_SET_CONTROL_LINE_STATE):
+	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+			| USB_CDC_REQ_SET_CONTROL_LINE_STATE:
 		if (w_index != acm->ctrl_id)
 			goto invalid;
 
 		value = 0;
 
-		/*
-		 * FIXME we should not allow data to flow until the
+		/* FIXME we should not allow data to flow until the
 		 * host sets the ACM_CTRL_DTR bit; and when it clears
 		 * that bit, we should return to that no-flow state.
 		 */
@@ -550,27 +544,24 @@ invalid:
 	return value;
 }
 
-static int acm_set_alt(struct usb_function *f, unsigned int intf,
-	unsigned int alt)
+static int acm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
-	struct f_acm *acm = func_to_acm(f);
+	struct f_acm		*acm = func_to_acm(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
 	bool is_setting = 0;
 	int ret;
 	/* we know alt == 0, so this is an activation or a reset */
 
-	/*
-	 * if it is single interface, intf, acm->ctrl_id and acm->data_id
-	 * are the same, so we can setting data and notify interface
-	 * in the same time.
+	/* if it is single interface, intf, acm->ctrl_id and acm->data_id
+	 * are the same, so we can setting data and notify interface in the same time.
 	 *
-	 * if it is multi interface, acm->ctrl_id and acm->data_id
-	 * are different, so the setting is go ahead in different times.
+	 * if it is multi interface, acm->ctrl_id and acm->data_id are different,
+	 * so the setting is go ahead in different times.
 	 */
 	if (intf == acm->ctrl_id) {
 		is_setting = 1;
 		if (acm->notify) {
-#if (KERNEL_VERSION(4, 4, 0) <= LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
 			VDBG(cdev, "reset acm control interface %d\n", intf);
 			usb_ep_disable(acm->notify);
 			VDBG(cdev, "init acm ctrl interface %d\n", intf);
@@ -578,14 +569,11 @@ static int acm_set_alt(struct usb_function *f, unsigned int intf,
 				return -EINVAL;
 #else
 			if (acm->notify->driver_data) {
-				VDBG(cdev, "reset acm control interface %d\n",
-					intf);
+				VDBG(cdev, "reset acm control interface %d\n", intf);
 				usb_ep_disable(acm->notify);
 			} else {
-				VDBG(cdev, "init acm ctrl interface %d\n",
-					intf);
-				if (config_ep_by_speed(cdev->gadget, f,
-					acm->notify))
+				VDBG(cdev, "init acm ctrl interface %d\n", intf);
+				if (config_ep_by_speed(cdev->gadget, f, acm->notify))
 					return -EINVAL;
 			}
 #endif
@@ -594,7 +582,7 @@ static int acm_set_alt(struct usb_function *f, unsigned int intf,
 				ERROR(cdev, "Enable acm interface ep failed\n");
 				return ret;
 			}
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 			acm->notify->driver_data = acm;
 #endif
 		}
@@ -602,7 +590,7 @@ static int acm_set_alt(struct usb_function *f, unsigned int intf,
 
 	if (intf == acm->data_id) {
 		is_setting = 1;
-#if (KERNEL_VERSION(4, 4, 0) <= LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
 		if (acm->port.in->enabled) {
 #else
 		if (acm->port.in->driver_data) {
@@ -610,12 +598,12 @@ static int acm_set_alt(struct usb_function *f, unsigned int intf,
 			DBG(cdev, "reset acm ttyGS%d\n", acm->port_num);
 			hw_gserial_disconnect(&acm->port);
 		}
-
 		if (!acm->port.in->desc || !acm->port.out->desc) {
 			DBG(cdev, "activate acm ttyGS%d\n", acm->port_num);
-			if (config_ep_by_speed(cdev->gadget, f, acm->port.in) ||
-				config_ep_by_speed(cdev->gadget, f,
-				acm->port.out)) {
+			if (config_ep_by_speed(cdev->gadget, f,
+					       acm->port.in) ||
+			    config_ep_by_speed(cdev->gadget, f,
+					       acm->port.out)) {
 				acm->port.in->desc = NULL;
 				acm->port.out->desc = NULL;
 				return -EINVAL;
@@ -629,25 +617,23 @@ static int acm_set_alt(struct usb_function *f, unsigned int intf,
 
 	return 0;
 }
-
 static void acm_disable(struct usb_function *f)
 {
-	struct f_acm *acm = func_to_acm(f);
+	struct f_acm	*acm = func_to_acm(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
 
 	DBG(cdev, "acm ttyGS%d deactivated\n", acm->port_num);
 	hw_gserial_disconnect(&acm->port);
-
 	if (acm->notify) {
 		usb_ep_disable(acm->notify);
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 		acm->notify->driver_data = NULL;
 #endif
 	}
 }
 /*-------------------------------------------------------------------------*/
 
-/*
+/**
  * acm_cdc_notify - issue CDC notification to host
  * @acm: wraps host to be notified
  * @type: notification type
@@ -662,14 +648,14 @@ static void acm_disable(struct usb_function *f)
  * about the only notification we issue:  SerialState change.
  */
 static int acm_cdc_notify(struct f_acm *acm, u8 type, u16 value,
-	void *data, unsigned int length)
+		void *data, unsigned length)
 {
-	struct usb_ep *ep = acm->notify;
-	struct usb_request *req;
-	struct usb_cdc_notification *notify;
-	const unsigned int len = sizeof(*notify) + length;
-	void *buf;
-	int status;
+	struct usb_ep			*ep = acm->notify;
+	struct usb_request		*req;
+	struct usb_cdc_notification	*notify;
+	const unsigned			len = sizeof(*notify) + length;
+	void				*buf;
+	int				status;
 
 	req = acm->notify_req;
 	acm->notify_req = NULL;
@@ -685,9 +671,7 @@ static int acm_cdc_notify(struct f_acm *acm, u8 type, u16 value,
 	notify->wValue = cpu_to_le16(value);
 	notify->wIndex = cpu_to_le16(acm->ctrl_id);
 	notify->wLength = cpu_to_le16(length);
-
-	if (length && data)
-		memcpy(buf, data, length);
+	memcpy(buf, data, length);
 
 	/* ep_queue() can complete immediately if it fills the fifo... */
 	spin_unlock(&acm->lock);
@@ -707,15 +691,14 @@ static int acm_cdc_notify(struct f_acm *acm, u8 type, u16 value,
 static int acm_notify_serial_state(struct f_acm *acm)
 {
 	struct usb_composite_dev *cdev = acm->port.func.config->cdev;
-	int status;
+	int			status;
 
 	spin_lock(&acm->lock);
 	if (acm->notify_req) {
 		DBG(cdev, "acm ttyGS%d serial state %04x\n",
-			acm->port_num, acm->serial_state);
+				acm->port_num, acm->serial_state);
 		status = acm_cdc_notify(acm, USB_CDC_NOTIFY_SERIAL_STATE,
-				0, &acm->serial_state,
-				sizeof(acm->serial_state));
+				0, &acm->serial_state, sizeof(acm->serial_state));
 	} else {
 		acm->pending = true;
 		acm->pending_notify = acm_notify_serial_state;
@@ -727,19 +710,18 @@ static int acm_notify_serial_state(struct f_acm *acm)
 
 static int acm_notify_flow_control(struct f_acm *acm)
 {
-	int status;
-	u16 value;
-
 	if (!acm) {
 		pr_err("%s:acm NULL pointer\n", __func__);
 		return -EINVAL;
 	}
 
-	value = (acm->rx_is_on ? 0x1 : 0x0) | (acm->tx_is_on ? 0x2 : 0x0);
+	int status;
+	u16 value = (acm->rx_is_on ? 0x1 : 0x0) | (acm->tx_is_on ? 0x2 : 0x0);
+
 	spin_lock(&acm->lock);
 	if (acm->notify_req) {
 		status = acm_cdc_notify(acm, USB_CDC_VENDOR_NTF_FLOW_CONTROL,
-					value, NULL, 0);
+		                        value, NULL, 0);
 	} else {
 		acm->pending = true;
 		acm->pending_notify = acm_notify_flow_control;
@@ -748,14 +730,12 @@ static int acm_notify_flow_control(struct f_acm *acm)
 	spin_unlock(&acm->lock);
 	return status;
 }
-
 static void acm_cdc_notify_complete(struct usb_ep *ep, struct usb_request *req)
 {
-	struct f_acm *acm = req->context;
-	u8 doit = false;
+	struct f_acm		*acm = req->context;
+	u8			doit = false;
 
-	/*
-	 * on this call path we do NOT hold the port spinlock,
+	/* on this call path we do NOT hold the port spinlock,
 	 * which is why ACM needs its own spinlock
 	 */
 	spin_lock(&acm->lock);
@@ -772,7 +752,7 @@ static void acm_cdc_notify_complete(struct usb_ep *ep, struct usb_request *req)
 
 static void acm_connect(struct gserial *port)
 {
-	struct f_acm *acm = port_to_acm(port);
+	struct f_acm		*acm = port_to_acm(port);
 
 	acm->serial_state |= ACM_CTRL_DSR | ACM_CTRL_DCD;
 	acm_notify_serial_state(acm);
@@ -780,7 +760,7 @@ static void acm_connect(struct gserial *port)
 
 static void acm_disconnect(struct gserial *port)
 {
-	struct f_acm *acm = port_to_acm(port);
+	struct f_acm		*acm = port_to_acm(port);
 
 	acm->serial_state &= ~(ACM_CTRL_DSR | ACM_CTRL_DCD);
 	acm_notify_serial_state(acm);
@@ -788,8 +768,7 @@ static void acm_disconnect(struct gserial *port)
 
 static void acm_notify_state(struct gserial *port, u16 state)
 {
-	struct f_acm *acm = port_to_acm(port);
-
+	struct f_acm        *acm = port_to_acm(port);
 	if (!acm) {
 		pr_err("%s:acm NULL pointer\n", __func__);
 		return;
@@ -801,8 +780,7 @@ static void acm_notify_state(struct gserial *port, u16 state)
 
 static void acm_flow_control(struct gserial *port, u32 rx_is_on, u32 tx_is_on)
 {
-	struct f_acm *acm = port_to_acm(port);
-
+	struct f_acm        *acm = port_to_acm(port);
 	if (!acm) {
 		pr_err("%s:acm NULL pointer\n", __func__);
 		return;
@@ -812,11 +790,10 @@ static void acm_flow_control(struct gserial *port, u32 rx_is_on, u32 tx_is_on)
 	acm->tx_is_on = tx_is_on;
 	(void)acm_notify_flow_control(acm);
 }
-
 static int acm_send_break(struct gserial *port, int duration)
 {
-	struct f_acm *acm = port_to_acm(port);
-	u16 state;
+	struct f_acm		*acm = port_to_acm(port);
+	u16			state;
 
 	state = acm->serial_state;
 	state &= ~ACM_CTRL_BRK;
@@ -830,16 +807,16 @@ static int acm_send_break(struct gserial *port, int duration)
 /*-------------------------------------------------------------------------*/
 
 /* ACM function driver setup/binding */
-static int acm_bind(struct usb_configuration *c, struct usb_function *f)
+static int
+acm_bind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usb_composite_dev *cdev = c->cdev;
-	struct f_acm *acm = func_to_acm(f);
-	struct usb_string *us;
-	int status;
-	struct usb_ep *ep;
+	struct f_acm		*acm = func_to_acm(f);
+	struct usb_string	*us;
+	int			status;
+	struct usb_ep		*ep;
 
-	/*
-	 * REVISIT might want instance-specific strings to help
+	/* REVISIT might want instance-specific strings to help
 	 * distinguish instances ...
 	 */
 
@@ -884,14 +861,14 @@ static int acm_bind(struct usb_configuration *c, struct usb_function *f)
 	if (!ep)
 		goto fail;
 	acm->port.in = ep;
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 	ep->driver_data = cdev; /* claim */
 #endif
 	ep = usb_ep_autoconfig(cdev->gadget, &acm_fs_out_desc);
 	if (!ep)
 		goto fail;
 	acm->port.out = ep;
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 	ep->driver_data = cdev; /* claim */
 #endif
 
@@ -900,7 +877,7 @@ static int acm_bind(struct usb_configuration *c, struct usb_function *f)
 		if (!ep)
 			goto fail;
 		acm->notify = ep;
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 		ep->driver_data = cdev; /* claim */
 #endif
 
@@ -918,8 +895,7 @@ static int acm_bind(struct usb_configuration *c, struct usb_function *f)
 		acm->notify_req = NULL;
 	}
 
-	/*
-	 * support all relevant hardware speeds... we expect that when
+	/* support all relevant hardware speeds... we expect that when
 	 * hardware is dual speed, all bulk-capable endpoints work at
 	 * both speeds
 	 */
@@ -928,33 +904,35 @@ static int acm_bind(struct usb_configuration *c, struct usb_function *f)
 
 	if (acm->support_notify)
 		acm_hs_notify_desc.bEndpointAddress =
-				acm_fs_notify_desc.bEndpointAddress;
+		    acm_fs_notify_desc.bEndpointAddress;
 
 	acm_ss_in_desc.bEndpointAddress = acm_fs_in_desc.bEndpointAddress;
 	acm_ss_out_desc.bEndpointAddress = acm_fs_out_desc.bEndpointAddress;
 
 	acm_single_interface_desc.bInterfaceProtocol = ACM_GET_TYPE(acm);
-#if (KERNEL_VERSION(4, 4, 0) <= LINUX_VERSION_CODE)
-	status = usb_assign_descriptors(f,
-					acm_fs_cur_function,
-					acm_hs_cur_function,
-					acm_ss_cur_function,
-					acm_ss_cur_function);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
+	status = usb_assign_descriptors(f, acm_fs_cur_function, acm_hs_cur_function,
+	                                acm_ss_cur_function, acm_ss_cur_function);
 #else
-	status = usb_assign_descriptors(f,
-					acm_fs_cur_function,
-					acm_hs_cur_function,
-					acm_ss_cur_function);
+	status = usb_assign_descriptors(f, acm_fs_cur_function, acm_hs_cur_function,
+	                                acm_ss_cur_function);
 #endif
 	if (status)
 		goto fail;
-
+#if 0
+	DBG(cdev, "acm ttyGS%d: %s speed IN/%s OUT/%s NOTIFY/%s\n",
+	    acm->port_num,
+	    gadget_is_superspeed(c->cdev->gadget) ? "super" :
+	    gadget_is_dualspeed(c->cdev->gadget) ? "dual" : "full",
+	    acm->port.in->name, acm->port.out->name,
+	    acm->notify->name);
+#endif
 	return 0;
 
 fail:
 	if (acm->notify_req)
 		hw_gs_free_req(acm->notify, acm->notify_req);
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 	/* we might as well release our claims on endpoints */
 	if (acm->notify)
 		acm->notify->driver_data = NULL;
@@ -970,7 +948,7 @@ fail:
 
 static void acm_unbind(struct usb_configuration *c, struct usb_function *f)
 {
-	struct f_acm *acm = func_to_acm(f);
+	struct f_acm		*acm = func_to_acm(f);
 
 	acm_string_defs[0].id = 0;
 	usb_free_all_descriptors(f);
@@ -1001,31 +979,23 @@ static inline void acm_set_config_vendor(struct f_acm *acm)
 			acm_ss_cur_function = acm_ss_function_single;
 		}
 
-		acm_single_interface_desc.bInterfaceClass =
-			HW_PNP21_CLASS;
-		acm_single_interface_desc.bInterfaceSubClass =
-			HW_PNP21_SUBCLASS;
-		/*
-		 * acm_single_interface_desc.bInterfaceProtocol =
-		 * ACM_GET_TYPE(acm);
-		 */
+		acm_single_interface_desc.bInterfaceClass = HW_PNP21_CLASS;
+		acm_single_interface_desc.bInterfaceSubClass = HW_PNP21_SUBCLASS;
+		//acm_single_interface_desc.bInterfaceProtocol = ACM_GET_TYPE(acm);
+		//printk("prot class is %d\n", acm_single_interface_desc.bInterfaceProtocol);
 	} else {
-		acm_control_interface_desc.bInterfaceClass =
-			HW_PNP21_CLASS;
-		acm_control_interface_desc.bInterfaceSubClass =
-			HW_PNP21_SUBCLASS;
-		acm_control_interface_desc.bInterfaceProtocol =
-			ACM_GET_TYPE(acm);
+		acm_control_interface_desc.bInterfaceClass = HW_PNP21_CLASS;
+		acm_control_interface_desc.bInterfaceSubClass = HW_PNP21_SUBCLASS;
+		acm_control_interface_desc.bInterfaceProtocol = ACM_GET_TYPE(acm);
 		acm_fs_cur_function = acm_fs_function;
 		acm_hs_cur_function = acm_hs_function;
 		acm_ss_cur_function = acm_ss_function;
 
 	}
 }
-
 static void acm_free_func(struct usb_function *f)
 {
-	struct f_acm *acm = func_to_acm(f);
+	struct f_acm		*acm = func_to_acm(f);
 
 	kfree(acm);
 }
@@ -1076,7 +1046,7 @@ static inline struct f_serial_opts *to_f_serial_opts(struct config_item *item)
 			func_inst.group);
 }
 
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
 CONFIGFS_ATTR_STRUCT(f_serial_opts);
 static ssize_t f_acm_attr_show(struct config_item *item,
 				 struct configfs_attribute *attr,
@@ -1101,31 +1071,28 @@ static void acm_attr_release(struct config_item *item)
 }
 
 static struct configfs_item_operations acm_item_ops = {
-	.release = acm_attr_release,
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
-	.show_attribute = f_acm_attr_show,
+	.release                = acm_attr_release,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
+	.show_attribute		= f_acm_attr_show,
 #endif
 };
 
-#if (KERNEL_VERSION(4, 4, 0) <= LINUX_VERSION_CODE)
-static ssize_t f_acm_port_num_show(struct config_item *item, char *page)
-{
-	return sprintf(page, "%u\n", to_f_serial_opts(item)->port_num);
-}
-
-CONFIGFS_ATTR_RO(f_acm_, port_num);
-static struct configfs_attribute *acm_attrs[] = {
-	&f_acm_attr_port_num,
-	NULL,
-};
-#else
 static ssize_t f_acm_port_num_show(struct f_serial_opts *opts, char *page)
 {
 	return sprintf(page, "%u\n", opts->port_num);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
+
+CONFIGFS_ATTR_RO(f_acm_port_, num);
+static struct configfs_attribute *acm_attrs[] = {
+	&f_acm_port_attr_num,
+	NULL,
+};
+#else
 static struct f_serial_opts_attribute f_acm_port_num =
 	__CONFIGFS_ATTR_RO(port_num, f_acm_port_num_show);
+
 
 static struct configfs_attribute *acm_attrs[] = {
 	&f_acm_port_num.attr,
@@ -1134,9 +1101,9 @@ static struct configfs_attribute *acm_attrs[] = {
 #endif
 
 static struct config_item_type acm_func_type = {
-	.ct_item_ops = &acm_item_ops,
-	.ct_attrs = acm_attrs,
-	.ct_owner = THIS_MODULE,
+	.ct_item_ops    = &acm_item_ops,
+	.ct_attrs	= acm_attrs,
+	.ct_owner       = THIS_MODULE,
 };
 
 static void acm_free_instance(struct usb_function_instance *fi)
@@ -1167,7 +1134,4 @@ static struct usb_function_instance *acm_alloc_instance(void)
 	return &opts->func_inst;
 }
 DECLARE_USB_FUNCTION_INIT(hw_acm, acm_alloc_instance, acm_alloc_func);
-
-MODULE_LICENSE("GPL v2");
-MODULE_DESCRIPTION("huawei usb gadget acm module driver");
-MODULE_AUTHOR("Huawei Technologies Co., Ltd.");
+MODULE_LICENSE("GPL");

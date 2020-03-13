@@ -1,4 +1,14 @@
-
+/*************************************************************************
+*   版权所有(C) 1987-2011, 深圳华为技术有限公司.
+*
+*   文 件 名 :  usb_vendor.h
+*
+*   作    者 :  wangzhongshun
+*
+*   描    述 :  gadget usb驱动内接口头文件
+*
+*   修改记录 :  2013年2月2日  v1.00  wangzhongshun创建
+*************************************************************************/
 
 #ifndef __USB_VENDOR_H__
 #define __USB_VENDOR_H__
@@ -81,6 +91,6 @@ static inline void bsp_usb_add_setup_dev(unsigned intf_id)
 }
 void bsp_usb_remove_setup_dev_fdname(void);
 void bsp_usb_set_enum_stat(unsigned intf_id, int enum_stat);
-void bsp_usb_set_last_cdev_name(const char *dev_name);
+void bsp_usb_set_last_cdev_name(char *dev_name);
 
 #endif /* __USB_VENDOR_H__ */
