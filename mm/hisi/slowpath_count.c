@@ -27,6 +27,10 @@
 #include <linux/moduleparam.h>
 #include <linux/seq_file.h>
 #include <slowpath_count.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+#include <linux/sched/signal.h>
+#endif
 
 #define FIRST_APP_UID KUIDT_INIT(10000)
 #define LAST_APP_UID  KUIDT_INIT(19999)
@@ -51,9 +55,7 @@ static int is_background(void)
 
 	adj = current->signal->oom_score_adj;
 	mm = current->mm;
-	/*lint -e666 -esym(666,*)*/
-	uid = current_uid(); /*lint !e64 */
-	/*lint +e666 +esym(666,*)*/
+	uid = current_uid();/*lint !e666*/
 
 	if (!mm || uid_lt(uid, FIRST_APP_UID) || uid_gt(uid, LAST_APP_UID))
 		return 1;
