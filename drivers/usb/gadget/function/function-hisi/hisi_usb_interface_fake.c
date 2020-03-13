@@ -68,7 +68,7 @@ __attribute__((weak)) int bsp_acm_close(void *handle)
 * 其它说明  : kernel
 *
 *****************************************************************************/
-__attribute__((weak)) int bsp_acm_write(void *handle, void *buf, unsigned int size)
+__attribute__((weak)) int bsp_acm_write(void *handle, const void *buf, unsigned int size)
 {
 	return -1;
 }
