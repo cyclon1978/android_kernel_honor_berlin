@@ -12,7 +12,7 @@
 #include <linux/sort.h>
 #include <linux/vmpressure.h>
 
-#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
 // for totalreserve_pages
 #include <linux/swap.h>
 #endif
@@ -71,8 +71,10 @@ static atomic_t nr_killed = ATOMIC_INIT(0);
 // or just full package -> shortstring will be found in excludes anyway
 static char excludes[256] = ".globallauncher,tes.accubattery,chtype.swiftkey,m.android.phone,com.whatsapp";
 
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
 static unsigned long memory_available_min = 400000;
 static unsigned long memory_free_min = 32000;
+#endif
 
 static unsigned long pressure_calls = 0;
 static unsigned long pressure_calls_executed = 0;
@@ -83,7 +85,7 @@ int simple_lmk_calculate_adj(int adj, char *comm) {
 	}
 	return adj;
 }
-
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
 bool simple_lmk_decide_reclaim_on_memory_pressure(void) {
 	struct sysinfo i;
 	long available;
@@ -169,7 +171,8 @@ bool simple_lmk_decide_reclaim_on_memory_pressure(void) {
 
 	return result;
 }
-#endif
+#endif // CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
+#endif // CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
 
 static int victim_size_cmp(const void *lhs_ptr, const void *rhs_ptr)
 {
@@ -406,7 +409,11 @@ void simple_lmk_mm_freed(struct mm_struct *mm)
 static int simple_lmk_vmpressure_cb(struct notifier_block *nb,
 				    unsigned long pressure, void *data)
 {
-	if (pressure == 100 && simple_lmk_decide_reclaim_on_memory_pressure() && !atomic_cmpxchg_acquire(&needs_reclaim, 0, 1))
+	if (pressure == 100 &&
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
+ simple_lmk_decide_reclaim_on_memory_pressure() && 
+#endif
+		!atomic_cmpxchg_acquire(&needs_reclaim, 0, 1))
 		wake_up(&oom_waitq);
 
 	return NOTIFY_OK;
@@ -464,6 +471,7 @@ static struct kparam_string excludes_param_string = {
 	.string = excludes,
 };
 
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
 static const struct kernel_param_ops memory_available_min_param_ops = {
 	.set = param_set_ulong,
 	.get = param_get_ulong,
@@ -473,6 +481,7 @@ static const struct kernel_param_ops memory_free_min_param_ops = {
 	.set = param_set_ulong,
 	.get = param_get_ulong,
 };
+#endif
 
 static const struct kernel_param_ops pressure_calls_param_ops = {
 	.set = param_set_ulong,
@@ -492,10 +501,12 @@ module_param_cb(minfree, &simple_lmk_init_ops, NULL, 0200);
 #ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
 module_param_cb(nokill, &excludes_param_ops, &excludes_param_string,
 		0644);
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED_MEMCONTROL
 module_param_cb(available_min, &memory_available_min_param_ops, &memory_available_min,
 		0644);
 module_param_cb(free_min, &memory_free_min_param_ops, &memory_free_min,
 		0644);
+#endif
 module_param_cb(calls, &pressure_calls_param_ops, &pressure_calls,
 		0444);
 module_param_cb(calls_executed, &pressure_calls_executed_param_ops, &pressure_calls_executed,
