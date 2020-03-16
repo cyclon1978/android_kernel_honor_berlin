@@ -47,8 +47,13 @@
 #include <linux/prefetch.h>
 #include <linux/printk.h>
 
+#ifdef CONFIG_HUAWEI_RCC
+#include <linux/version.h>
+#include <linux/vmstat.h>
+#endif
+
 #include <asm/tlbflush.h>
-#include <asm/div64.h> /*lint !e451 */
+#include <asm/div64.h>
 
 #include <linux/swapops.h>
 #include <linux/balloon_compaction.h>
@@ -134,7 +139,6 @@ struct scan_control {
 };
 
 #define lru_to_page(_head) (list_entry((_head)->prev, struct page, lru))
-/*lint -e750 -esym(750,prefetch_prev_lru_page) */
 #ifdef ARCH_HAS_PREFETCH
 #define prefetch_prev_lru_page(_page, _base, _field)			\
 	do {								\
@@ -148,7 +152,7 @@ struct scan_control {
 #else
 #define prefetch_prev_lru_page(_page, _base, _field) do { } while (0)
 #endif
-/*lint -e750 +esym(750,prefetch_prev_lru_page) */
+
 #ifdef ARCH_HAS_PREFETCHW
 #define prefetchw_prev_lru_page(_page, _base, _field)			\
 	do {								\
@@ -2860,9 +2864,19 @@ static bool shrink_zone(struct zone *zone, struct scan_control *sc,
 			reclaim_state->reclaimed_slab = 0;
 		}
 
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
+#ifdef CONFIG_HUAWEI_RCC
+		if (!sc->rcc_mode) {
+#endif
+#endif
 		vmpressure(sc->gfp_mask, sc->target_mem_cgroup,
 			   sc->nr_scanned - nr_scanned,
 			   sc->nr_reclaimed - nr_reclaimed);
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
+#ifdef CONFIG_HUAWEI_RCC
+		}
+#endif
+#endif
 
 		if (sc->nr_reclaimed - nr_reclaimed)
 			reclaimable = true;
@@ -3061,8 +3075,18 @@ retry:
 		count_vm_event(ALLOCSTALL);
 
 	do {
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
+#ifdef CONFIG_HUAWEI_RCC
+		if (!sc->rcc_mode) {
+#endif
+#endif
 		vmpressure_prio(sc->gfp_mask, sc->target_mem_cgroup,
 				sc->priority);
+#ifdef CONFIG_ANDROID_SIMPLE_LMK_EXTENDED
+#ifdef CONFIG_HUAWEI_RCC
+		}
+#endif
+#endif
 		sc->nr_scanned = 0;
 		zones_reclaimable = shrink_zones(zonelist, sc);
 
@@ -4377,6 +4401,8 @@ void check_move_unevictable_pages(struct page **pages, int nr_pages)
  */
 int try_to_free_pages_ex(int nr_pages, int mode)
 {
+	unsigned long reclaimed = 0;
+
 	gfp_t mask = GFP_KERNEL|__GFP_HIGHMEM|__GFP_FS|__GFP_IO;
 	struct scan_control sc = {
 		.gfp_mask = mask,
@@ -4391,7 +4417,21 @@ int try_to_free_pages_ex(int nr_pages, int mode)
 		.nodemask = NULL,
 	};
 	struct zonelist *zonelist = node_zonelist(numa_node_id(), mask);
-	return do_try_to_free_pages(zonelist, &sc);
+
+	reclaimed = do_try_to_free_pages(zonelist, &sc);
+
+#if KERNEL_VERSION(4, 9, 0) <= LINUX_VERSION_CODE
+	{
+	    enum vm_event_item item = ALLOCSTALL_NORMAL - ZONE_NORMAL + sc.reclaim_idx;
+	    if (global_reclaim(&sc) && raw_cpu_read(vm_event_states.event[item]))
+	        raw_cpu_dec(vm_event_states.event[item]);
+	}
+#else
+	if (global_reclaim(&sc) && this_cpu_read(vm_event_states.event[ALLOCSTALL]))
+	    this_cpu_dec(vm_event_states.event[ALLOCSTALL]);
+#endif
+
+	return reclaimed;
 }
 #endif
 
