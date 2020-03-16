@@ -66,7 +66,7 @@ struct rcc_module {
 #define M(x) ((x) >> (20 - PAGE_SHIFT))
 
 /* threshhold time for idle stat judgement. in ms. */
-#define RCC_IDLE_THRESHOLD		10
+#define RCC_IDLE_THRESHOLD		50
 
 /* swap full percent for stop compress thread. in percent. */
 #define RCC_SWAP_PERCENT_LOW		80
@@ -92,6 +92,11 @@ struct rcc_module {
 /* max reclaim page size on boot complete */
 #define RCC_MAX_RECLAIM_ON_BOOT	((320*1024*1024)>>(PAGE_SHIFT))
 
+/* if anon page is less RCC_ANON_PAGE_MIN or cpu busy, count++, and then count more than 20000,
+*  exit the full fill swap
+*/
+#define RCC_MAX_WAIT_COUNT    20000
+
 
 /* threshhold time for idle stat judgement. in ms. */
 #define RCC_IDLE_SLOW			1000
@@ -106,4 +111,5 @@ struct rcc_module {
 
 #define RCC_WAIT_INFINITE		-1
 
+#define RCC_SLEEP_TIME          200
 #endif
